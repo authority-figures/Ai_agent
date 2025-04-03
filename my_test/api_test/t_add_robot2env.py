@@ -13,7 +13,7 @@ headers = {
 
 # 定义请求体数据
 data1 = {
-    "urdf_path": r"F:\sw\urdf_files\minicobo_v1.4\urdf\minicobo_v1.4.urdf",
+    "urdf_path": r"./models/jaka_description/urdf/jaka_minicobo.urdf",
     "basePosition": [0,0,0],
     "baseOrientation": [0,0,0,1],
 }
@@ -21,7 +21,7 @@ data1 = {
 robot_id = None
 data2 = {
     "robot_id": robot_id,
-    "target_position": [0.3,0.3,0.2],
+    "target_position": [0.2,0.2,0.2],
     "target_orientation": [0,0,0,1],
     "maxVelocity" : 10,
 }

@@ -1,4 +1,5 @@
 from colorama import init, Fore, Style, Back
+from pathlib import Path
 
 # 初始化colorama，autoreset=True确保颜色不会影响后续输出
 init(autoreset=True)
@@ -122,3 +123,11 @@ class ColorPrinter:
     def success(cls, message):
         """打印成功信息"""
         cls.print(message, "green", "bright", prefix="SUCCESS")
+
+
+def truncate_path_to(path, target_dir_name):
+    path = Path(path).resolve()
+    for parent in path.parents:
+        if parent.name == target_dir_name:
+            return str(parent)
+    return None  # 如果没找到

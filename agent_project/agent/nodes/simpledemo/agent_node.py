@@ -1,4 +1,5 @@
 import json
+import os
 
 from langchain.schema import AgentAction,HumanMessage,SystemMessage,AIMessage
 from agent_project.agent.llm import chatGPT_llm
@@ -10,7 +11,7 @@ from langchain.prompts import PromptTemplate
 from langgraph.graph.message import Messages  # 导入Langchain的Messages类
 from agent_project.agent.messages.myMessages import SimpleMessages
 import re
-
+from agent_project.agent.utils import truncate_path_to
 
 
 
@@ -22,7 +23,9 @@ llm_with_tools = llm.bind_tools(simulation_tools+jaka_tools)
 
 color_printer = ColorPrinter()
 
-system_prompt_path = r"F:\python\Ai_agent\agent_project\agent\prompts\仿真环境执行任务prompts3.txt"
+current_dir = os.path.dirname(os.path.abspath(__file__))
+agent_project_path = truncate_path_to(current_dir, "agent_project")
+system_prompt_path = os.path.join(agent_project_path,"agent/prompts/仿真环境执行任务prompts3.txt")
 with open(system_prompt_path, 'r', encoding='utf-8') as file:
     # 读取文件的全部内容并存储为字符串
     system_prompt_text = file.read()

@@ -282,7 +282,8 @@ class Robot:
         :return:
         '''
         script_dir = os.path.dirname(os.path.abspath(__file__))
-        urdf_file = os.path.join(script_dir, 'urdf',urdf_file)
+        # urdf_file = os.path.join(script_dir, 'urdf',urdf_file)
+        urdf_file = urdf_file   # 这里不需要路径转换，因为robot和执行脚本在同一个根目录
         tree = ET.parse(urdf_file)
         root = tree.getroot()
 

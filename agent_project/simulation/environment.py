@@ -53,6 +53,7 @@ class SimulationEnvironment:
             baseOrientation = [0, 0, 0, 1]
 
         robot = Robot(self.physics_client)
+        robot.f_print = True
         robot.load_urdf(fileName=urdf_path, basePosition=basePosition, useFixedBase=useFixedBase,
                              flags=p.URDF_USE_SELF_COLLISION,
                              )
@@ -96,7 +97,7 @@ class SimulationEnvironment:
         try:
             for i in range(min(len(joint_positions), robot.num_avail_joints)):
                 p.setJointMotorControl2(
-                    robot.id_robot, i, p.POSITION_CONTROL,maxVelocity=maxVelocity, targetPosition=joint_positions[i]
+                    robot.id_robot, robot.ids_avail_joints[i], p.POSITION_CONTROL,maxVelocity=maxVelocity, targetPosition=joint_positions[i]
                 )
         except Exception as e:
             print(e)
@@ -107,15 +108,26 @@ class SimulationEnvironment:
 
 
 
-    def move_robot(self, joint_positions):
+    def move_robot(self, robot_id,joint_positions):
         """ 控制机械臂的关节 """
-        if self.robot_id is None:
+        if robot_id is None:
             return "No robot loaded"
 
-        num_joints = p.getNumJoints(self.robot_id)
-        for i in range(min(len(joint_positions), num_joints)):
+        robot = [robot for robot in self.robot_list if robot.id_robot == robot_id][0]
+        for i in range(min(len(joint_positions), robot.num_avail_joints)):
             p.setJointMotorControl2(
-                self.robot_id, i, p.POSITION_CONTROL, targetPosition=joint_positions[i]
+                robot_id, robot.ids_avail_joints[i], p.POSITION_CONTROL, targetPosition=joint_positions[i]
+            )
+        return "Robot moved successfully"
+    def set_robot(self, robot_id,joint_positions):
+        """ 控制机械臂的关节 """
+        if robot_id is None:
+            return "No robot loaded"
+
+        robot = [robot for robot in self.robot_list if robot.id_robot == robot_id][0]
+        for i in range(min(len(joint_positions), robot.num_avail_joints)):
+            p.resetJointState(
+                robot_id, robot.ids_avail_joints[i], targetValue=joint_positions[i]
             )
         return "Robot moved successfully"
 
@@ -167,3 +179,18 @@ class SimulationEnvironment:
         """
         position, ori = p.getBasePositionAndOrientation(object_id)
         return position,ori
+
+
+
+if __name__ == '__main__':
+    import time
+    sim_env = SimulationEnvironment()
+    sim_env.initialize()
+    robot_id = sim_env.load_robot(r"./models/jaka_description/urdf/jaka_minicobo.urdf",None,None,True)
+    sim_env.move_robot_to_target(robot_id,[0.2,0.3,0.3],[0,0,0,1],10)
+
+    # sim_env.move_robot(robot_id,np.array([0,0,1.57,0,0,0]))
+    while sim_env.running:
+        sim_env.step_simulation()
+        sim_env.robot_list[0].show_link_sys(7, -1, 1)
+        time.sleep(sim_env.time_step)  # 控制仿真步进时间
