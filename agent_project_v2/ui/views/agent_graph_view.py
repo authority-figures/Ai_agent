@@ -15,16 +15,13 @@ class AgentGraphView(QWidget):
         title.setStyleSheet("font-size: 16px; font-weight: bold;")
         layout.addWidget(title)
 
-        # # 获取Agent图结构
-        # agent_service = ServiceLocator.get('agent_service')
-        # graph_structure = agent_service.get_graph_structure()
 
         # 创建图组件
         self.graph_widget = GraphWidget({}) # 暂时传入空图，后续可以通过update_graph_state更新
         layout.addWidget(self.graph_widget)
 
         # 指定延迟时间后，执行一次特定的函数 / 槽函数
-        QTimer.singleShot(1000, self.fetch_graph_data)
+        QTimer.singleShot(1000, self.fetch_graph_data)  # 获取图结构
 
         # 连接信号
         self.graph_widget.node_selected.connect(self.node_selected.emit)

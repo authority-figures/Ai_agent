@@ -1,18 +1,32 @@
 from PyQt5.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsPolygonItem,
                              QGraphicsTextItem,QGraphicsLineItem,QGraphicsItem,QGraphicsEllipseItem,QGraphicsPathItem
                              )
-from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QLineF, QRectF, QPoint
+from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QLineF, QRectF, QPoint, QTimer
 from PyQt5.QtGui import QBrush, QPen, QColor, QFont, QPainter,QPainterPath, QPolygonF
 import networkx as nx
 import numpy as np
+from networkx.drawing.nx_agraph import graphviz_layout
 
 class GraphNode(QGraphicsRectItem):
-    def __init__(self, node_id, name, pos, width=120, height=60):
+    def __init__(self, node_id, name, pos, node_type='normal', width=120, height=60):
         super().__init__(0, 0, width, height)
         self.node_id = node_id
+        self.node_type = node_type
         self.setPos(pos)
-        self.setBrush(QBrush(QColor(200, 220, 255)))
+
+        # 不同类型节点颜色
+        color_map = {
+            "__start__": QColor(180, 255, 180),
+            "__end__": QColor(255, 180, 180),
+            "action": QColor(200, 200, 255),
+            "decision": QColor(255, 255, 180),
+            "normal": QColor(200, 220, 255)
+        }
+        self.setBrush(QBrush(color_map.get(node_type, QColor(200, 220, 255))))
         self.setPen(QPen(Qt.black, 2))
+
+        # self.setBrush(QBrush(QColor(200, 220, 255)))
+        # self.setPen(QPen(Qt.black, 2))
         self.setFlag(QGraphicsItem.ItemIsMovable, True)   # 可拖动
         self.setFlag(QGraphicsItem.ItemIsSelectable, True)
         self.setCacheMode(QGraphicsItem.DeviceCoordinateCache)
@@ -41,12 +55,17 @@ class GraphNode(QGraphicsRectItem):
 
 # ---------------- 边（带箭头） ----------------
 class GraphEdge(QGraphicsPathItem):
-    def __init__(self, start_node, end_node):
+    def __init__(self, start_node, end_node, edge_type='normal'):
         super().__init__()
         self.start_node = start_node
         self.end_node = end_node
+        self.edge_type = edge_type
         pen = QPen(Qt.black, 1.5)
-        pen.setCapStyle(Qt.FlatCap)
+        if edge_type == 'condition':
+            pen.setStyle(Qt.DashLine)
+            pen.setColor(QColor(200, 50, 50))
+        else:
+            pen.setCapStyle(Qt.FlatCap)
         self.setPen(pen)
         self.update_position()
 
@@ -88,11 +107,18 @@ class GraphEdge(QGraphicsPathItem):
                                 inter_p2 + QPointF(arrow_size * np.cos(rad - 2.6),
                                                    arrow_size * np.sin(rad - 2.6))])
         if hasattr(self, 'arrow'):
-            self.scene().removeItem(self.arrow)
+            # 只有当旧箭头的归属场景是当前场景时，才删除（避免scene不匹配）
+            if self.arrow.scene() == self.scene():
+                self.scene().removeItem(self.arrow)
+            # （可选）删除旧箭头的引用，避免内存泄漏
+            delattr(self, 'arrow')
         self.arrow = QGraphicsPolygonItem(arrow_head, parent=None)
         self.arrow.setBrush(QBrush(Qt.black))
         self.arrow.setPen(QPen(Qt.black))
         self.arrow.setZValue(-1)
+
+        if self.scene() is not None:
+            self.scene().addItem(self.arrow)
 
 
 # ---------------- 视图 ----------------
@@ -105,10 +131,18 @@ class GraphWidget(QGraphicsView):
         self.setScene(self.scene)
         self.setRenderHint(QPainter.Antialiasing)
         self.setDragMode(QGraphicsView.ScrollHandDrag)
-        self.scene.setSceneRect(-500, -500, 1000, 1000)
+        self.scene.setSceneRect(0, 0, 1000, 1000)
 
         self.nodes, self.edges = {}, []
         self.create_graph(graph_structure)
+
+        self.ctrl_pressed = False  # Ctrl键状态
+        self.is_panning = False
+
+        # 刷新图布局
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.refresh_position)
+        self.timer.start(100)  # 每5秒刷新一次布局
 
     def create_graph(self, g):
         if not g: return
@@ -118,37 +152,176 @@ class GraphWidget(QGraphicsView):
         G.add_edges_from([(e['from'], e['to']) for e in g['edges']])
 
         # 布局算法可选：spring, kamada_kawai, dot(需pygraphviz), planar...
-        pos = nx.spring_layout(G, seed=42, k=2, iterations=50)
-
+        # pos = nx.spring_layout(G, seed=42, k=2, iterations=50)
+        pos = graphviz_layout(G, prog='dot')
+        transformed_pos = self.transform_graphviz_layout_to_scene(
+            pos, self.scene.sceneRect() , scale_factor=0.5, flip_y=True)
         # 创建节点
         for node in g['nodes']:
-            p = QPointF(*pos[node['id']] * 200)  # 放大坐标
-            n = GraphNode(node['id'], node['name'], p)
+            # p = QPointF(*pos[node['id']] * 200)  # 放大坐标
+            # coords = [coord * 2 for coord in pos[node['id']]]  # 缩放
+            # coords[1] = -coords[1]  # y轴反转
+            # p = QPointF(*coords)
+            p = transformed_pos.get(node['id'])  # 使用转换后的坐标
+
+            n = GraphNode(node['id'], node['name'], p, node_type=node.get('node_type', 'normal'))
             self.nodes[node['id']] = n
             self.scene.addItem(n)
 
         # 创建边
         for e in g['edges']:
             if e['from'] in self.nodes and e['to'] in self.nodes:
-                edge = GraphEdge(self.nodes[e['from']], self.nodes[e['to']])
+                edge = GraphEdge(self.nodes[e['from']], self.nodes[e['to']], edge_type=e.get('type', 'normal'))
                 self.edges.append(edge)
                 self.scene.addItem(edge)
 
         # 把 edges 引用挂到 scene，方便全局刷新
         self.scene.edges = self.edges
 
+    import networkx as nx
+    from PyQt5.QtCore import QRectF, QPointF
+
+    def transform_graphviz_layout_to_scene(self, pos, scene_rect, scale_factor=0.8, flip_y=True):
+        """
+        将 graphviz_layout 生成的坐标转换为 QGraphicsScene 中的居中坐标（修复Y轴反转问题）
+
+        参数:
+            pos: dict，graphviz_layout 返回的节点坐标字典，格式 {node_id: (x, y)}
+            scene_rect: QRectF，画布范围（如 QRectF(0, 0, 1000, 1000)）
+            scale_factor: float，图占画布的比例（0.8 表示留 20% 边距）
+            flip_y: bool，是否反转 y 轴（基于图的中心反转，避免跑出窗口）
+
+        返回:
+            transformed_pos: dict，转换后的节点坐标字典，格式 {node_id: QPointF(x, y)}
+        """
+        if not pos:  # 处理空图情况
+            return {}
+
+        # -------------------------- 步骤1：计算图的原始边界和中心（关键：翻转的基准）
+        all_coords = list(pos.values())
+        all_x = [x for x, y in all_coords]
+        all_y = [y for x, y in all_coords]
+
+        # 图的原始边界（left/right：X方向；top/bottom：Y方向）
+        graph_left, graph_right = min(all_x), max(all_x)
+        graph_top, graph_bottom = min(all_y), max(all_y)
+        # 图的原始中心（翻转Y轴的基准点）
+        graph_center_x = (graph_left + graph_right) / 2
+        graph_center_y = (graph_top + graph_bottom) / 2  # 重点：基于这个中心翻转Y轴
+        # 图的原始宽高（用于计算缩放比例）
+        graph_width = graph_right - graph_left
+        graph_height = graph_bottom - graph_top
+
+        # 处理单节点场景（避免除以0）
+        graph_width = graph_width if graph_width != 0 else 1.0
+        graph_height = graph_height if graph_height != 0 else 1.0
+
+        # -------------------------- 步骤2：对每个节点先做「基于图中心的Y轴反转」
+        flipped_pos = {}  # 存储翻转后的原始坐标
+        for node_id, (x, y) in pos.items():
+            if flip_y:
+                # 核心公式：基于图的Y中心翻转 → 新Y = 2*图中心Y - 原始Y
+                # 原理：以图中心为对称轴，上下对称翻转（比如中心Y=100，原始Y=120 → 翻转后Y=80）
+                flipped_y = 2 * graph_center_y - y
+                flipped_pos[node_id] = (x, flipped_y)
+            else:
+                flipped_pos[node_id] = (x, y)  # 不翻转则直接保留原始坐标
+
+        # -------------------------- 步骤3：缩放（基于翻转后的坐标）
+        # 计算缩放比例（确保图不超过画布的 scale_factor 比例）
+        scale_x = (scene_rect.width() * scale_factor) / graph_width
+        scale_y = (scene_rect.height() * scale_factor) / graph_height
+        scale = min(scale_x, scale_y)  # 取最小比例，避免图超出画布
+
+        # 重新提取翻转后的坐标，计算缩放后的图中心（用于后续偏移）
+        flipped_coords = list(flipped_pos.values())
+        flipped_all_x = [x for x, y in flipped_coords]
+        flipped_all_y = [y for x, y in flipped_coords]
+        # 缩放后的图中心（因缩放是均匀的，也可直接用 原始中心 * 缩放比例，结果一致）
+        scaled_graph_center_x = (min(flipped_all_x) + max(flipped_all_x)) / 2 * scale
+        scaled_graph_center_y = (min(flipped_all_y) + max(flipped_all_y)) / 2 * scale
+
+        # -------------------------- 步骤4：居中偏移（基于画布中心）
+        canvas_center_x = scene_rect.center().x()
+        canvas_center_y = scene_rect.center().y()
+        # 偏移量：画布中心 - 缩放后的图中心（确保图整体居中）
+        offset_x = canvas_center_x - scaled_graph_center_x
+        offset_y = canvas_center_y - scaled_graph_center_y
+
+        # -------------------------- 步骤5：计算最终坐标（缩放 + 偏移）
+        transformed_pos = {}
+        for node_id, (x, y) in flipped_pos.items():
+            final_x = x * scale + offset_x
+            final_y = y * scale + offset_y
+            transformed_pos[node_id] = QPointF(final_x, final_y)
+
+        return transformed_pos
+
     def update_graph_state(self, state):
         cur = state.get('current_node')
         for nid, node in self.nodes.items():
             node.set_current(nid == cur)
+        self.refresh_position()
+
+
+
+    def refresh_position(self):
+        # 刷新所有边的位置
         for edge in self.edges:
             edge.update_position()
 
+    # 2. 监听 Ctrl 按键按下/松开，更新 ctrl_pressed 状态
+    def keyPressEvent(self, ev):
+        if ev.key() == Qt.Key_Control:
+            self.ctrl_pressed = True
+        super().keyPressEvent(ev)
+
+    def keyReleaseEvent(self, ev):
+        if ev.key() == Qt.Key_Control:
+            self.ctrl_pressed = False
+            # Ctrl松开时，若处于平移状态，恢复拖拽模式
+            if self.is_panning:
+                self.setDragMode(QGraphicsView.NoDrag)
+                self.is_panning = False
+        super().keyReleaseEvent(ev)
+
     def mousePressEvent(self, ev):
-        item = self.itemAt(ev.pos())
-        if isinstance(item, GraphNode):
-            self.node_selected.emit(item.node_id)
-        super().mousePressEvent(ev)
+        # 情况1：Ctrl + 鼠标左键 → 启用平移模式
+        if self.ctrl_pressed and ev.button() == Qt.LeftButton:
+            self.setDragMode(QGraphicsView.ScrollHandDrag)
+            self.is_panning = True  # 标记进入平移状态
+            # 手动触发父类的鼠标按下事件，确保平移生效
+            super().mousePressEvent(ev)
+
+        # 情况2：未按Ctrl + 左键点击节点 → 触发节点选择
+        elif not self.ctrl_pressed and ev.button() == Qt.LeftButton:
+            item = self.itemAt(ev.pos())
+            if isinstance(item, GraphNode):
+                self.node_selected.emit(item.node_id)
+            # 未点击节点时，不触发平移（拖拽模式仍为NoDrag）
+            # super().mousePressEvent(ev) # 可选：若想允许节点拖动，可启用此行
+        # 其他情况（如右键、中键）：按默认逻辑处理
+        else:
+            super().mousePressEvent(ev)
+
+
+
+    # 4. 鼠标松开时恢复初始拖拽模式
+    def mouseReleaseEvent(self, ev):
+        # 若处于平移状态，松开左键后恢复NoDrag
+        if self.is_panning and ev.button() == Qt.LeftButton:
+            self.setDragMode(QGraphicsView.NoDrag)
+            self.is_panning = False
+        super().mouseReleaseEvent(ev)
+
+    # 5. 鼠标移动时：确保平移状态下正常响应
+    def mouseMoveEvent(self, ev):
+        # 只有处于平移状态时，才触发父类的移动事件（保证平移流畅）
+        if self.is_panning:
+            super().mouseMoveEvent(ev)
+        else:
+            # 非平移状态下，可按需处理（如节点hover效果）
+            super().mouseMoveEvent(ev)
 
     def wheelEvent(self, ev):
         factor = 1.15 if ev.angleDelta().y() > 0 else 1/1.15
@@ -180,17 +353,17 @@ if __name__ == "__main__":
     # 创建示例图结构
     test_graph = {
         "nodes": [
-            {"id": "start", "name": "开始"},
+            {"id": "start", "name": "开始", "type": "start"},
             {"id": "input", "name": "输入处理"},
             {"id": "decision", "name": "决策节点"},
             {"id": "action1", "name": "动作1"},
             {"id": "action2", "name": "动作2"},
-            {"id": "end", "name": "结束"}
+            {"id": "end", "name": "结束", "type": "end"}
         ],
         "edges": [
             {"from": "start", "to": "input"},
             {"from": "input", "to": "decision"},
-            {"from": "decision", "to": "action1"},
+            {"from": "decision", "to": "action1", "type": "condition"},
             {"from": "decision", "to": "action2"},
             {"from": "action1", "to": "end"},
             {"from": "action2", "to": "end"}

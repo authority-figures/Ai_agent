@@ -23,8 +23,8 @@ class State(TypedDict):
 workflow = StateGraph(State)
 
 # ✅ 添加节点
-workflow.add_node("agent_node",agent_node)
-workflow.add_node("action_node",action_node)
+workflow.add_node("agent_node",agent_node,metadata={"node_type":""})  # 添加描述信息
+workflow.add_node("action_node",action_node,metadata={"node_type":""})
 
 
 # ✅ 任务流程
@@ -44,6 +44,7 @@ workflow.add_conditional_edges("agent_node",should_continue,{"continue": "action
 workflow.add_edge("action_node", "agent_node")  # 循环执行
 # ✅ 编译 Graph
 graph = workflow.compile()
+
 
 
 if __name__ == '__main__':

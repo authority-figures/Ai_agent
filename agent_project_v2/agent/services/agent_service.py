@@ -4,7 +4,7 @@
 '''
 
 from langgraph.graph import StateGraph
-from agent.graph.main_graph import graph as compiled_graph
+from agent.graph.chat_loop_graph import graph as compiled_graph
 
 
 class AgentService:
@@ -31,12 +31,13 @@ class AgentService:
 
         # 假设 graph_obj 有 nodes 和 edges 属性
         # 遍历节点，将其转换为前端可识别的格式
-        for node_name in graph_obj.nodes:
+        for node_name,data in graph_obj.nodes.items():
             nodes.append({
                 "id": node_name,
                 "name": node_name,
                 # 可以根据节点类型添加更多属性，如形状、颜色等
-                "type": "stateNode" if "state" in node_name.lower() else "actionNode"
+                "node_type": node_name if "start" in node_name or "end" in node_name
+                else data.metadata.get("node_type", "normal") if data.metadata is not None else "normal"
             })
 
         # 2. 根据 edges 实际格式，调整遍历逻辑（重点修改这里）

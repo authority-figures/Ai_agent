@@ -29,7 +29,7 @@ def return2input(state):
     return {"input":""}
 workflow.add_node("clear_input_node",return2input)
 workflow.add_node("agent_node",agent_node)
-workflow.add_node("action_node",action_node)
+workflow.add_node("action_node",action_node,metadata={"node_type":"action"})
 
 # 路由条件函数 - 决定是继续循环还是结束
 def router(state):
