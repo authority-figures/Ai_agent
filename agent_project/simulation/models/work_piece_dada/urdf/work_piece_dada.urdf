@@ -1,0 +1,84 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="work_piece_dada">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-7.25386340446471E-06 1.73472347597681E-18 0.0327154717972264"
+        rpy="0 0 0" />
+      <mass
+        value="0.238284235346798" />
+      <inertia
+        ixx="0.000439014910114538"
+        ixy="6.8263842377772E-20"
+        ixz="9.90152354709561E-08"
+        iyy="0.000186009962206693"
+        iyz="-2.43156833283264E-20"
+        izz="0.000296722641220365" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://work_piece_dada/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="m">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://work_piece_dada/meshes/base_link.obj" />
+      </geometry>
+    </collision>
+  </link>
+
+  <link
+    name="Link_1">
+    
+    <!-- <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://work_piece_dada/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual> -->
+
+  </link>
+  <joint
+    name="joint_1"
+    type="fixed">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_1" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+
+
+
+
+</robot>

@@ -1,0 +1,313 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="camera">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="1.8386017256322E-05 0.0121106333575236 -0.000925064162838425"
+        rpy="0 0 0" />
+      <mass
+        value="0.089837599324514" />
+      <inertia
+        ixx="7.29305890037371E-06"
+        ixy="3.20767409554941E-10"
+        ixz="-1.78474723509001E-08"
+        iyy="6.08286835368981E-05"
+        iyz="4.92978007946511E-08"
+        izz="6.14425832943228E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="Black">
+        <color
+          rgba="0.8 1 0.8 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Link_left_depth">
+    <inertial>
+      <origin
+        xyz="-6.93889390390723E-18 -2.97595413136635E-36 0.000339772440268237"
+        rpy="0 0 0" />
+      <mass
+        value="5.43205075383495E-05" />
+      <inertia
+        ixx="6.21043187601662E-11"
+        ixy="-3.91138337645837E-43"
+        ixz="5.24488635466825E-29"
+        iyy="6.21043187601662E-11"
+        iyz="-1.07528163018172E-43"
+        izz="9.50350954643001E-11" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_left_depth.STL" />
+      </geometry>
+      <material
+        name="Red">
+        <color
+          rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_left_depth.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint1"
+    type="fixed">
+    <origin
+      xyz="-0.0329623935367042 0.0122741227822766 0.00992257519599611"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_left_depth" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="Link_point_matrix">
+    <inertial>
+      <origin
+        xyz="-1.73472347597681E-18 -5.22294647013031E-36 0.000875170878881264"
+        rpy="0 0 0" />
+      <mass
+        value="0.000220095894659259" />
+      <inertia
+        ixx="8.15056376643653E-10"
+        ixy="-8.05109671961335E-42"
+        ixz="9.86319422265173E-27"
+        iyy="8.15056376643652E-10"
+        iyz="-1.03889613456541E-42"
+        izz="1.4998808236006E-09" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_point_matrix.STL" />
+      </geometry>
+      <material
+        name="Blue">
+        <color
+          rgba="0 0 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_point_matrix.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint2"
+    type="fixed">
+    <origin
+      xyz="-0.0109623935367042 0.0122741227822766 0.00942257519599611"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_point_matrix" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="Link_right_depth">
+    <inertial>
+      <origin
+        xyz="-3.46944695195361E-18 0 0.000875170878881268"
+        rpy="0 0 0" />
+      <mass
+        value="0.000220095894659259" />
+      <inertia
+        ixx="8.15056376643651E-10"
+        ixy="-7.02123150425064E-42"
+        ixz="-1.32824701735016E-27"
+        iyy="8.15056376643651E-10"
+        iyz="-9.47628086499658E-42"
+        izz="1.4998808236006E-09" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_right_depth.STL" />
+      </geometry>
+      <material
+        name="Red">
+        <color
+          rgba="1 0 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_right_depth.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint3"
+    type="fixed">
+    <origin
+      xyz="0.0179623935367042 0.0122741227822766 0.00942257519599611"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_right_depth" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="Link_RGB">
+    <inertial>
+      <origin
+        xyz="3.46944695195361E-18 -7.63958078279334E-20 0"
+        rpy="0 0 0" />
+      <mass
+        value="4.18879020478639E-06" />
+      <inertia
+        ixx="1.67551608191456E-12"
+        ixy="0"
+        ixz="0"
+        iyy="1.67551608191456E-12"
+        iyz="0"
+        izz="1.67551608191456E-12" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_RGB.STL" />
+      </geometry>
+      <material
+        name="Green">
+        <color
+          rgba="0 1 0 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_RGB.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint4"
+    type="fixed">
+    <!-- 修改了该joint的坐标系方向，为了与图像坐标系对齐 -->
+    <origin
+      xyz="0.0309623935367042 0.0122741227822766 0.00942257519599611"
+      rpy="0 0 3.14" /> 
+    <parent
+      link="base_link" />
+    <child
+      link="Link_RGB" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  <link
+    name="Link_end">
+    <inertial>
+      <origin
+        xyz="0.00171632073873391 0.0122741227822766 0.0119225751959961"
+        rpy="0 0 0" />
+      <mass
+        value="0.00245133225673037" />
+      <inertia
+        ixx="6.11884516518844E-08"
+        ixy="-1.20870238069248E-11"
+        ixz="-5.61586524006748E-24"
+        iyy="1.46473056099688E-06"
+        iyz="-1.42634718370369E-24"
+        izz="1.52551045024919E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_end.STL" />
+      </geometry>
+      <material
+        name="end">
+        <color
+          rgba="0.6 0.4 0.3 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://camera/meshes/Link_end.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint5"
+    type="fixed">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_end" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+</robot>

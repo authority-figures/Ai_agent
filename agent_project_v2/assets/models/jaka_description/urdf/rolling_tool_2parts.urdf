@@ -1,0 +1,164 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="rolling_tool_2parts">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="4.28979519087409E-06 -0.0097308787206717 0.00534342257888346"
+        rpy="0 0 0" />
+      <mass
+        value="0.413387444796258" />
+      <inertia
+        ixx="0.000172171285898137"
+        ixy="-3.83691954756746E-08"
+        ixz="-7.0422633667189E-09"
+        iyy="0.00157814156749049"
+        iyz="7.33971489879568E-07"
+        izz="0.00171013178821198" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rolling_tool_2parts/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="base_link">
+        <color
+          rgba="0.898039215686275 0.917647058823529 0.929411764705882 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rolling_tool_2parts/meshes/base_link.STL" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Link_1">
+    <inertial>
+      <origin
+        xyz="0.0585039100756753 -0.00809662109969473 -0.0723162244953095"
+        rpy="0 0 0" />
+      <mass
+        value="0.12060974285785" />
+      <inertia
+        ixx="0.00027891137403179"
+        ixy="-1.19871824095448E-07"
+        ixz="-1.26001500358866E-06"
+        iyy="0.000282514821326324"
+        iyz="-9.54871490587579E-06"
+        izz="1.58454020110692E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rolling_tool_2parts/meshes/Link_1.STL" />
+      </geometry>
+      <material
+        name="Link_1">
+        <color
+          rgba="0.996078431372549 0.870588235294118 0.76078431372549 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rolling_tool_2parts/meshes/Link_1.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+<link
+    name="Link_2">
+    <inertial>
+      <origin
+        xyz="-0.0585039191249418 -0.00809434350801617 -0.0723162234546826"
+        rpy="0 0 0" />
+      <mass
+        value="0.120609737141676" />
+      <inertia
+        ixx="0.000278911369414492"
+        ixy="1.20330299644494E-07"
+        ixz="1.25986280953546E-06"
+        iyy="0.000282514813696642"
+        iyz="-9.54864893006399E-06"
+        izz="1.58454020365071E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rolling_tool_2parts/meshes/Link_2.STL" />
+      </geometry>
+      <material
+        name="Link_2">
+        <color
+          rgba="0.996078431372549 0.870588235294118 0.76078431372549 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://rolling_tool_2parts/meshes/Link_2.STL" />
+      </geometry>
+    </collision>
+  </link>
+
+<link name="rolling_tool_tcp"/>
+
+
+  <joint
+    name="joint_1"
+    type="fixed">
+    <origin
+      xyz="0 0 0.1"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_1" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+  
+  <joint
+    name="joint_2"
+    type="fixed">
+    <origin
+      xyz="0 0 0.1"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_2" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+    <joint name="rolling_tool_tcp_joint" type="fixed">
+        <origin xyz="0 0 0.1" rpy="0 0 0" />
+        <parent link="base_link" />
+        <child link="rolling_tool_tcp" />
+    </joint>
+</robot>

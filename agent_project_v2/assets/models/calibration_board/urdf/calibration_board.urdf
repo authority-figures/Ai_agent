@@ -1,0 +1,35 @@
+<?xml version="1.0"?>
+<robot name="calibration_board">
+
+  <link name="base_link">
+
+    <visual>
+    <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://calibration_board/meshes/calibration_board.obj" scale="0.125 1.25 0.125"/>
+      </geometry>
+      <material name="White">
+         <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+
+  </link>
+
+  <link name="link_1">
+  </link>
+  <link name="link_2">
+  </link>
+
+  <joint name="joint_1" type="fixed">
+    <parent link="base_link"/>
+    <child link="link_1"/>
+    <origin xyz="-0.006 0 -0.006" rpy="-1.57 -1.57 0"/>
+   </joint>
+
+   <joint name="joint_2" type="fixed">
+    <parent link="base_link"/>
+    <child link="link_2"/>
+    <origin xyz="-0.0125 0 -0.0125" rpy="-1.57 -1.57 0"/>
+   </joint>
+
+</robot>

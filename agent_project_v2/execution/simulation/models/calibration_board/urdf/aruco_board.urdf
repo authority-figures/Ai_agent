@@ -1,0 +1,18 @@
+<?xml version="1.0"?>
+<robot name="calibration_board">
+
+  <link name="base_link">
+
+    <visual>
+    <origin xyz="0 -0.001 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://calibration_board/meshes/calibration_board.obj" scale="1 1 1"/>
+      </geometry>
+      <material name="White">
+         <color rgba="1 1 1 1"/>
+      </material>
+    </visual>
+
+  </link>
+
+</robot>

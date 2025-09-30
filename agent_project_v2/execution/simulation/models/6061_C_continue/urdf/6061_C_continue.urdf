@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="6061_C_continue">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.00016223 -0.0011466 0.051783"
+        rpy="0 0 0" />
+      <mass
+        value="0.61008" />
+      <inertia
+        ixx="0.0026194"
+        ixy="1.9168E-05"
+        ixz="1.1401E-06"
+        iyy="0.0018473"
+        iyz="6.9143E-05"
+        izz="0.0010658" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://6061_C_continue/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="base">
+        <color
+          rgba="0.8 0.8 0.1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://6061_C_continue/meshes/base_link.obj" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Link_1">
+    <inertial>
+      <origin
+        xyz="3.4238E-05 -0.0028506 0.13944"
+        rpy="0 0 0" />
+      <mass
+        value="0.20989" />
+      <inertia
+        ixx="0.00076292"
+        ixy="4.6592E-05"
+        ixz="5.4524E-06"
+        iyy="0.000535"
+        iyz="8.4658E-07"
+        izz="0.00026665" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://6061_C_continue/meshes/Link_1.STL" />
+      </geometry>
+      <material
+        name="Link_1">
+        <color
+          rgba="0.7 0.6 0.2 0.8" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+      <!-- 使用baselink碰撞体代替link1 -->
+        <mesh
+          filename="package://6061_C_continue/meshes/base_link.obj" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_1"
+    type="fixed">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_1" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+</robot>

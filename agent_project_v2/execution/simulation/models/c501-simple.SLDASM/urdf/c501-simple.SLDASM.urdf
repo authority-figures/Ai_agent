@@ -1,0 +1,390 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- This URDF was automatically created by SolidWorks to URDF Exporter! Originally created by Stephen Brawner (brawner@gmail.com) 
+     Commit Version: 1.6.0-4-g7f85cfe  Build Version: 1.6.7995.38578
+     For more information, please see http://wiki.ros.org/sw_urdf_exporter -->
+<robot
+  name="c501-simple.SLDASM">
+  <link
+    name="base_link">
+    <inertial>
+      <origin
+        xyz="-0.0755864156102248 0.72275973739925 0.411798224538449"
+        rpy="0 0 0" />
+      <mass
+        value="5581.94322669293" />
+      <inertia
+        ixx="1007.71174804637"
+        ixy="64.5731862619963"
+        ixz="42.2172766710896"
+        iyy="1449.67672027087"
+        iyz="-150.058719904986"
+        izz="2019.82599890026" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/meshes/base_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.529411764705882 0.549019607843137 0.549019607843137 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/processed-geoms/base_link_vhacd.obj" />
+      </geometry>
+    </collision>
+  </link>
+  <link
+    name="Link_A">
+    <inertial>
+      <origin
+        xyz="-0.057956 0.0014408 -0.24232"
+        rpy="0 0 0" />
+      <mass
+        value="534.57" />
+      <inertia
+        ixx="16.188"
+        ixy="-0.024997"
+        ixz="-1.1589"
+        iyy="53.758"
+        iyz="0.033222"
+        izz="58.111" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/meshes/Link_A.STL" />
+      </geometry>
+      <material
+        name="A">
+        <color
+          rgba="0.8 0.1 0.1 0.9" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/processed-geoms/Link_A_vhacd.obj" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_A"
+    type="revolute">
+    <origin
+      xyz="0 0 0.785"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_A" />
+    <axis
+      xyz="-1 0 0" />
+    <limit
+      lower="-1.57"
+      upper="1.57"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link concave="yes"
+    name="Link_C">
+    <inertial>
+      <origin
+        xyz="1.4861E-16 -5.5511E-16 -0.024913"
+        rpy="0 0 0" />
+      <mass
+        value="7.8575" />
+      <inertia
+        ixx="0.13217"
+        ixy="1.1165E-16"
+        ixz="-1.7773E-17"
+        iyy="0.13217"
+        iyz="9.6035E-17"
+        izz="0.26107" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/meshes/Link_C.STL" />
+      </geometry>
+      <material
+        name="C">
+        <color
+          rgba="1 0.50196 0.50196 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/processed-geoms/Link_C_simple_vhacd.obj" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_C"
+    type="revolute">
+    <origin
+      xyz="0 0 -0.0995"
+      rpy="0 0 0" />
+    <parent
+      link="Link_A" />
+    <child
+      link="Link_C" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-6.28"
+      upper="6.28"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link
+    name="Link_X">
+    <inertial>
+      <origin
+        xyz="-0.320981067687767 0.555366618150545 0.201056942827223"
+        rpy="0 0 0" />
+      <mass
+        value="241.368906221286" />
+      <inertia
+        ixx="25.1071275781226"
+        ixy="0.0435525256094283"
+        ixz="-0.0514307925165566"
+        iyy="12.7148541366661"
+        iyz="0.244401346888919"
+        izz="31.3483687592862" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/meshes/Link_X.STL" />
+      </geometry>
+      <material
+        name="X">
+        <color
+          rgba="0.796078431372549 0.823529411764706 0.937254901960784 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/processed-geoms/Link_X_vhacd.obj" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_X"
+    type="prismatic">
+    <origin
+      xyz="0.72 0.4765 0.802"
+      rpy="0 0 0" />
+    <parent
+      link="base_link" />
+    <child
+      link="Link_X" />
+    <axis
+      xyz="-1 0 0" />
+    <limit
+      lower="0"
+      upper="1.12"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link
+    name="Link_Y">
+    <inertial>
+      <origin
+        xyz="-0.35028 -0.42566 0.39309"
+        rpy="0 0 0" />
+      <mass
+        value="2896.5" />
+      <inertia
+        ixx="298.54"
+        ixy="0.00013327"
+        ixz="-0.44042"
+        iyy="246.65"
+        iyz="9.9669"
+        izz="266.43" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/meshes/Link_Y.STL" />
+      </geometry>
+      <material
+        name="Y">
+        <color
+          rgba="0.79216 0.81961 0.93333 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/processed-geoms/Link_Y_vhacd.obj" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_Y"
+    type="prismatic">
+    <origin
+      xyz="0.032 1.065 0.508"
+      rpy="0 0 0" />
+    <parent
+      link="Link_X" />
+    <child
+      link="Link_Y" />
+    <axis
+      xyz="0 -1 0" />
+    <limit
+      lower="0"
+      upper="0.6"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link
+    name="Link_Z">
+    <inertial>
+      <origin
+        xyz="-0.22499 -0.18935 -0.48748"
+        rpy="0 0 0" />
+      <mass
+        value="874.5" />
+      <inertia
+        ixx="93.024"
+        ixy="-0.00034869"
+        ixz="-0.0013128"
+        iyy="96.221"
+        iyz="0.30154"
+        izz="29.648" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/meshes/Link_Z.STL" />
+      </geometry>
+      <material
+        name="Z">
+        <color
+          rgba="0.52941 0.54902 0.54902 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/processed-geoms/Link_Z_vhacd.obj" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_Z"
+    type="prismatic">
+    <origin
+      xyz="-0.12 -0.968 0.82"
+      rpy="0 0 0" />
+    <parent
+      link="Link_Y" />
+    <child
+      link="Link_Z" />
+    <axis
+      xyz="0 0 -1" />
+    <limit
+      lower="-0.3"
+      upper="0.15"
+      effort="100"
+      velocity="1" />
+  </joint>
+  <link
+    name="Link_S">
+    <inertial>
+      <origin
+        xyz="8.4863E-06 1.561E-05 0.22127"
+        rpy="0 0 0" />
+      <mass
+        value="8.031" />
+      <inertia
+        ixx="0.13956"
+        ixy="2.916E-06"
+        ixz="-1.3306E-05"
+        iyy="0.13956"
+        iyz="-2.4475E-05"
+        izz="0.023979" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/meshes/Link_S.STL" />
+      </geometry>
+      <material
+        name="S">
+        <color
+          rgba="0.75294 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="package://c501-simple.SLDASM/processed-geoms/Link_S_vhacd.obj" />
+      </geometry>
+    </collision>
+  </link>
+  <joint
+    name="joint_S"
+    type="fixed">
+    <origin
+      xyz="-0.225 -0.215 -1.19"
+      rpy="0 0 0" />
+    <parent
+      link="Link_Z" />
+    <child
+      link="Link_S" />
+    <axis
+      xyz="0 0 0" />
+  </joint>
+</robot>
