@@ -1,8 +1,13 @@
 # api/main.py
-from fastapi import FastAPI
+import sys
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-
+import logging
 from api.routers.graph_info import router as graph_router
+from fastapi.middleware.cors import CORSMiddleware
+from agent_project_v2.core.service_locator import ServiceLocator
+
+
 
 # 创建 FastAPI 应用实例
 app = FastAPI(title="Agent System API", version="0.1.0")
@@ -26,3 +31,28 @@ app.include_router(graph_router)   # 注册图结构相关的路由
 @app.get("/")
 async def root():
     return {"message": "Agent System API is running"}
+
+
+# 创建websocket用于向前端推送实时更新
+active_connections = set()
+@app.websocket("/ws/state")
+async def state_websocket_endpoint(websocket: WebSocket):
+    await websocket.accept()
+    active_connections.add(websocket)
+    try:
+        while True:
+            # 保持连接，忽略接受
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        active_connections.remove(websocket)
+        print("WebSocket disconnected")
+
+
+try:
+    agent_service = ServiceLocator.get('agent_service')
+    if agent_service:
+        agent_service.set_connection_pool(active_connections)
+    else:
+        print("AgentService not found in ServiceLocator.")
+except Exception as e:
+    print(f"Error sending state to AgentService: {e}")

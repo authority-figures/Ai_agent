@@ -12,7 +12,7 @@ from langgraph.graph.message import Messages  # 导入Langchain的Messages类
 from agent_project.agent.messages.myMessages import SimpleMessages
 import re
 from agent_project.agent.utils import truncate_path_to
-
+from agent_project.agent.nodes.node_publisher import send_state
 
 
 # 初始化 LLM（使用 OpenAI API 或其他 LLM）
@@ -25,7 +25,7 @@ color_printer = ColorPrinter()
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 agent_project_path = truncate_path_to(current_dir, "agent_project")
-system_prompt_path = os.path.join(agent_project_path,"agent/prompts/仿真环境执行任务prompts3.txt")
+system_prompt_path = os.path.join(agent_project_path,"agent/prompts/仿真环境执行任务prompts4.txt")
 with open(system_prompt_path, 'r', encoding='utf-8') as file:
     # 读取文件的全部内容并存储为字符串
     system_prompt_text = file.read()
@@ -87,6 +87,8 @@ def generate_agent_action(state):
     """
     try:
         print("state",state)
+        send_state("agent_node",{"status":"running","content":state["input"]})
+
         messages = state.get("messages", SimpleMessages())
         input_text = state.get("input", "")
         action_result = state.get("action_result", [])

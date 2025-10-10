@@ -2,13 +2,29 @@
 提供Agent相关服务
 负责与langgrain交互
 '''
-
+import traceback
 from langgraph.graph import StateGraph
 from agent.graph.chat_loop_graph import graph as compiled_graph
 
 
 class AgentService:
     """一个专门用于提供智能体相关功能的服务"""
+    def __init__(self):
+        self.connections = set()
+
+    def set_connection_pool(self, connections):
+        '''从 FastAPI 注入 WebSocket 连接池'''
+        self.connections = connections
+
+    def invoke_graph(self, user_input):
+        try:
+            result = compiled_graph.invoke({"input": user_input})
+        except EOFError:
+            # 打印完整堆栈，定位哪一行调了 input()
+            traceback.print_exc()
+            # 如果想继续跑，可以 return 一个默认值
+            result = {"error": "interactive input not allowed in this environment"}
+        return result
 
     def get_graph_structure(self):
         """
@@ -68,3 +84,25 @@ class AgentService:
     # 你可以在这里添加其他服务方法，如运行智能体、处理状态等
     # def run_agent(self, input_message):
     #    ...
+
+
+    async def broadcast_state(self, state):
+        """
+        广播智能体状态更新
+        """
+        # 这里可以集成一个事件总线，或者直接调用回调函数等
+        message = {
+            "type": "state_update",
+            "data": state
+        }
+        print("[AgentService] Broadcasting state:", state)
+        # ServiceLocator.get('event_bus').publish('agent_state_update', state)
+
+        dead_connections = []
+        for ws in list(self.connections):
+            try:
+                await ws.send_json(message)
+            except Exception:
+                dead_connections.append(ws)
+        for ws in dead_connections:
+            self.connections.remove(ws)

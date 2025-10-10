@@ -6,6 +6,11 @@ from PyQt5.QtWidgets import QApplication
 from PyQt5.QtCore import QTimer
 import threading
 import multiprocessing
+import time
+import socket
+
+os.environ["QT_IM_MODULE"] = "fcitx"
+
 
 # 添加项目根目录到Python路径，确保可以导入自定义模块
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -29,7 +34,29 @@ def run_fastapi_app():
     import uvicorn
 
     # 先在这里初始化服务，确保API启动时服务已注册
-    initialize_services()
+    # initialize_services()
+    """
+    初始化核心服务并注册到ServiceLocator
+    """
+    logger.info("Initializing services...")
+
+    try:
+        from agent_project_v2.core.service_locator import ServiceLocator
+        from agent.services.agent_service import AgentService
+
+        # 初始化AgentService
+        agent_service = AgentService()
+        ServiceLocator.register('agent_service', agent_service)
+
+        logger.info("AgentService registered successfully")
+
+        # 这里可以初始化其他服务...
+        # from services.simulation_service import SimulationService
+        # simulation_service = SimulationService()
+        # ServiceLocator.register('simulation_service', simulation_service)
+
+    except Exception as e:
+        logger.error(f"Failed to initialize services: {str(e)}")
 
     try:
         # 指定启动配置：应用对象、主机、端口等
@@ -38,10 +65,19 @@ def run_fastapi_app():
             host="0.0.0.0",  # 允许所有网络接口访问
             port=8000,       # 指定端口
             reload=False,     # 开发时启用热重载，生产环境应设为 False
-            log_level="info"
+            log_level="info",
+            loop="asyncio" # 调试时使用 asyncio 事件循环
         )
     except Exception as e:
         logger.error(f"Failed to start FastAPI server: {e}")
+    finally:
+        time.sleep(5)
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            result = s.connect_ex(('127.0.0.1', 8000))
+            if result == 0:
+                print("✅ Backend actually listening on 8000")
+            else:
+                print("❌ Backend did NOT start in debug mode")
 
 
 def initialize_services():

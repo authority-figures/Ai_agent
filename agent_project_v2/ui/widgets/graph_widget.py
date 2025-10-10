@@ -8,6 +8,9 @@ import numpy as np
 from networkx.drawing.nx_agraph import graphviz_layout
 
 class GraphNode(QGraphicsRectItem):
+    '''
+    用于显示langgraph的图结构的节点
+    '''
     def __init__(self, node_id, name, pos, node_type='normal', width=120, height=60):
         super().__init__(0, 0, width, height)
         self.node_id = node_id
@@ -55,6 +58,9 @@ class GraphNode(QGraphicsRectItem):
 
 # ---------------- 边（带箭头） ----------------
 class GraphEdge(QGraphicsPathItem):
+    '''
+    用于显示langgraph的图结构的边
+    '''
     def __init__(self, start_node, end_node, edge_type='normal'):
         super().__init__()
         self.start_node = start_node
@@ -123,6 +129,9 @@ class GraphEdge(QGraphicsPathItem):
 
 # ---------------- 视图 ----------------
 class GraphWidget(QGraphicsView):
+    '''
+    用于显示langgraph的图结构
+    '''
     node_selected = pyqtSignal(str)
 
     def __init__(self, graph_structure):

@@ -4,7 +4,7 @@ from dotenv import load_dotenv,find_dotenv,dotenv_values
 # 加载 .env 文件
 langsmith_env = dotenv_values(find_dotenv(".env.langsmith"))
 openai_api_key = langsmith_env.get("OPENAI_API_KEY")
-openai_env = dotenv_values(find_dotenv(".env.openai_taobao2"))
+openai_env = dotenv_values(find_dotenv(".env.openai_taobao3"))
 
 
 # 读取 API Key 和 Base URL
