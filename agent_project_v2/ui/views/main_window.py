@@ -1,7 +1,7 @@
 import sys,os
 
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ))
-
+import requests
 from PyQt5.QtWidgets import QMainWindow, QSplitter, QWidget, QHBoxLayout, QVBoxLayout, QDockWidget
 from PyQt5.QtCore import Qt
 from simulation_view import SimulationView
@@ -9,7 +9,7 @@ from simulation_view import SimulationView
 from agent_graph_view import AgentGraphView
 from node_detail_view import NodeDetailView
 from chat_history_view import ChatHistoryView
-
+from agent_chat_view import AgentChatView, AgentWorker
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -32,8 +32,17 @@ class MainWindow(QMainWindow):
         right_splitter = QSplitter(Qt.Vertical)
 
         # 右侧上部：Agent工作流视图（占50%高度）
+        # 包含对话视图和节点图
+        top_splitter = QSplitter(Qt.Horizontal)
+        self.agent_chat_view = AgentChatView()
         self.agent_graph_view = AgentGraphView()
-        right_splitter.addWidget(self.agent_graph_view)
+        top_splitter.addWidget(self.agent_chat_view)
+        top_splitter.addWidget(self.agent_graph_view)
+        top_splitter.setStretchFactor(0, 4)  # 上部占40%
+        top_splitter.setStretchFactor(1, 6)  # 下部占60%
+        self.agent_chat_view.setMinimumWidth(400)
+        right_splitter.addWidget(top_splitter)
+
 
         # 右侧下部：详细信息区（垂直分割）
         bottom_splitter = QSplitter(Qt.Vertical)
@@ -54,7 +63,10 @@ class MainWindow(QMainWindow):
         main_splitter.setStretchFactor(1, 4)  # 右侧占40%
 
         self.setCentralWidget(main_splitter)
-
+        self.agent_chat_view.messageSent.connect(self.handle_agent_reply)
+        self.agent_graph_view.messageState_updated.connect(
+            lambda state_dict:self.agent_chat_view.append_message("Agent", f"Agent状态更新: {state_dict}")
+        )
         # 连接信号
         # self.agent_graph_view.node_selected.connect(self.on_node_selected)
         # ServiceLocator.get('event_bus').subscribe('agent_state_update', self.on_agent_update)
@@ -73,6 +85,31 @@ class MainWindow(QMainWindow):
     def on_chat_message(self, message):
         """添加新聊天消息"""
         self.chat_history_view.add_message(message)
+
+
+    # test
+    def handle_agent_reply(self, text):
+
+        # 1. 如果上一条还没跑完，直接终止它
+        if hasattr(self, 'worker') and self.worker.isRunning():
+            self.worker.terminate()  # 或 .requestInterruption() + 线程里检查
+            self.worker.wait()  # 等它真的结束
+
+        # 2. 再启动新线程
+        self.worker = AgentWorker(text, self)
+        self.worker.reply_ready.connect(self.on_agent_reply)
+        self.worker.error_occurred.connect(self.on_agent_error)
+        self.worker.start()
+
+        # reply = f"I received: {text}"
+        # self.agent_chat_view.append_message("Agent", reply)
+
+    def on_agent_reply(self, reply):
+        self.agent_chat_view.append_message("Agent", reply)
+
+    def on_agent_error(self, err):
+        self.agent_chat_view.append_message("System", f"[Error] {err}")
+
 
 
 if __name__ == "__main__":
