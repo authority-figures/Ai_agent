@@ -33,23 +33,29 @@ class MainWindow(QMainWindow):
 
         # 右侧上部：Agent工作流视图（占50%高度）
         # 包含对话视图和节点图
-        top_splitter = QSplitter(Qt.Horizontal)
+        top_splitter = QSplitter(Qt.Vertical)
         self.agent_chat_view = AgentChatView()
         self.agent_graph_view = AgentGraphView()
         top_splitter.addWidget(self.agent_chat_view)
-        top_splitter.addWidget(self.agent_graph_view)
+        agent_graph_view_splitter = QSplitter(Qt.Horizontal)
+        agent_graph_view_splitter.addWidget(self.agent_graph_view)
+        # 节点详情视图（占30%高度）
+        self.node_detail_view = NodeDetailView()
+        agent_graph_view_splitter.addWidget(self.node_detail_view)
+        agent_graph_view_splitter.setStretchFactor(0, 6)
+        agent_graph_view_splitter.setStretchFactor(1, 4)
+        self.node_detail_view.setMinimumWidth(300)
+        top_splitter.addWidget(agent_graph_view_splitter)
         top_splitter.setStretchFactor(0, 4)  # 上部占40%
         top_splitter.setStretchFactor(1, 6)  # 下部占60%
-        self.agent_chat_view.setMinimumWidth(400)
+        self.agent_chat_view.setMinimumHeight(300)
         right_splitter.addWidget(top_splitter)
 
 
         # 右侧下部：详细信息区（垂直分割）
         bottom_splitter = QSplitter(Qt.Vertical)
 
-        # 节点详情视图（占30%高度）
-        self.node_detail_view = NodeDetailView()
-        bottom_splitter.addWidget(self.node_detail_view)
+
 
         # 对话历史视图（占70%高度）
         self.chat_history_view = ChatHistoryView()
@@ -66,6 +72,12 @@ class MainWindow(QMainWindow):
         self.agent_chat_view.messageSent.connect(self.handle_agent_reply)
         self.agent_graph_view.messageState_updated.connect(
             lambda state_dict:self.agent_chat_view.append_message("Agent", f"Agent状态更新: {state_dict}")
+        )
+        # 将图状态更新信号连接到聊天视图的槽函数
+        self.agent_graph_view.messageState_updated.connect(self.node_detail_view.display_node_state)
+        # 将图状态更新信号连接到节点详情视图的槽函数
+        self.agent_graph_view.messageState_updated.connect(
+            lambda state_dict:self.on_agent_update({**state_dict,"current_node": state_dict.get("node","")})
         )
         # 连接信号
         # self.agent_graph_view.node_selected.connect(self.on_node_selected)

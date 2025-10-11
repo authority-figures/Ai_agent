@@ -32,7 +32,7 @@ class AgentService:
         返回包含节点和边的字典，便于前端可视化。
 
         Returns:
-            dict: 例如 {'nodes': [...], 'edges': [...]}
+            dict: {"nodes": [...], "edges": [{"from": str, "to": str, "condition": bool}]}
         """
         # 方法1: 如果你的LangGraph版本支持，直接获取图表示
         # graph_structure = compiled_graph.get_graph()
@@ -62,7 +62,9 @@ class AgentService:
             for edge in graph_obj.edges:
                 source_node = edge[0]  # 元组第一个元素是起点
                 target_node = edge[1]  # 元组第二个元素是终点
-                edges.append({"from": source_node, "to": target_node})
+                data = edge[2] # 元组第三个元素是边的数据（如果有）
+                conditional = edge[3]   # 元组第四个元素是条件（True/False）
+                edges.append({"from": source_node, "to": target_node, "data": data, "type": "condition" if conditional else "normal"})
 
         # ------------------- 情况2：edges 是“字典列表”（含 source/target 键） -------------------
         elif isinstance(graph_obj.edges, list) and all(isinstance(edge, dict) for edge in graph_obj.edges):
@@ -71,7 +73,9 @@ class AgentService:
                 if "source" in edge and "target" in edge:
                     source_node = edge["source"]
                     target_node = edge["target"]
-                    edges.append({"from": source_node, "to": target_node})
+                    data = edge.get("data", None)  # 边数据可选
+                    conditional = edge.get("condition", False)  # 条件可选
+                    edges.append({"from": source_node, "to": target_node, "data": data, "type": "condition" if conditional else "normal"})
                 else:
                     print(f"忽略无效边（缺少 source/target）: {edge}")
 
@@ -95,8 +99,7 @@ class AgentService:
             "type": "state_update",
             "data": state
         }
-        print("[AgentService] Broadcasting state:", state)
-        # ServiceLocator.get('event_bus').publish('agent_state_update', state)
+        # print("[AgentService] Broadcasting state:", state)
 
         dead_connections = []
         for ws in list(self.connections):

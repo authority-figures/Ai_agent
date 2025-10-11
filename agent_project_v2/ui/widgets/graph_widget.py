@@ -2,7 +2,7 @@ from PyQt5.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsRectItem, Q
                              QGraphicsTextItem,QGraphicsLineItem,QGraphicsItem,QGraphicsEllipseItem,QGraphicsPathItem
                              )
 from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QLineF, QRectF, QPoint, QTimer
-from PyQt5.QtGui import QBrush, QPen, QColor, QFont, QPainter,QPainterPath, QPolygonF
+from PyQt5.QtGui import QBrush, QPen, QColor, QFont, QPainter,QPainterPath, QPolygonF, QFontMetrics
 import networkx as nx
 import numpy as np
 from networkx.drawing.nx_agraph import graphviz_layout
@@ -15,7 +15,9 @@ class GraphNode(QGraphicsRectItem):
         super().__init__(0, 0, width, height)
         self.node_id = node_id
         self.node_type = node_type
-        self.setPos(pos)
+        # self.setPos(pos)
+        center_pos = (pos.x() + width / 2, pos.y() + height / 2)
+        self.setPos(QPointF(center_pos[0] - width / 2, center_pos[1] - height / 2))
 
         # 不同类型节点颜色
         color_map = {
@@ -36,8 +38,27 @@ class GraphNode(QGraphicsRectItem):
 
         # 文字
         self.text = QGraphicsTextItem(name, self)
+        font = QFont("Arial", 15)
+        self.text.setFont(font)
+        # 2. 计算文字实际宽高
+        fm = QFontMetrics(font)
+        text_w = fm.horizontalAdvance(name) + 20  # 左右各留 10 px 边距
+        text_h = fm.height() + 10  # 上下各留 5 px 边距
+
+        # 3. 取最大值，避免过窄
+        new_width = max(text_w, width)  # 你原来的最小 120
+        new_height = max(text_h, height)  # 最小 60
+        self.setRect(0, 0, new_width, new_height)
+        self.text.setParentItem(self)
         rect = self.text.boundingRect()
-        self.text.setPos(width/2 - rect.width()/2, height/2 - rect.height()/2)
+        self.text.setPos(new_width/2 - rect.width()/2, new_height/2 - rect.height()/2)
+        # 更新位置，保持中心点不变
+        delta_x = (new_width - width) / 2
+        delta_y = (new_height - height) / 2
+        if delta_x >= 0 or delta_y >= 0:
+            self.moveBy(-delta_x, -delta_y)
+
+
 
         # 状态灯
         self.light = QGraphicsEllipseItem(5, 5, 10, 10, self)
@@ -52,7 +73,7 @@ class GraphNode(QGraphicsRectItem):
         if change == QGraphicsItem.ItemPositionChange:
             for edge in self.scene().edges:
                 if edge.start_node is self or edge.end_node is self:
-                    edge.update_position()
+                    edge.update_position_v2()
         return super().itemChange(change, value)
 
 
@@ -61,11 +82,26 @@ class GraphEdge(QGraphicsPathItem):
     '''
     用于显示langgraph的图结构的边
     '''
-    def __init__(self, start_node, end_node, edge_type='normal'):
+    def __init__(self, start_node, end_node, edge_type='normal',data=None):
         super().__init__()
         self.start_node = start_node
         self.end_node = end_node
         self.edge_type = edge_type
+        self.edge_data = data
+
+        # 文字标签
+        self.label = QGraphicsTextItem(self)  # 以边为父项，会跟随移动
+        self.label.setZValue(self.zValue() + 2)  # 比箭头再高一层
+        self.label.setDefaultTextColor(Qt.black)
+        font = QFont("Arial", 8)
+        self.label.setFont(font)
+        self.label_bg = QGraphicsRectItem(self)  # 底纹
+        self.label_bg.setZValue(self.label.zValue() - 1)  # 背景在文字下方
+        # 透明边框 + 淡色填充
+        self.label_bg.setBrush(QBrush(QColor(200, 200, 200, 200)))  # 米黄半透明
+        self.label_bg.setPen(QPen(Qt.NoPen))
+
+
         pen = QPen(Qt.black, 1.5)
         if edge_type == 'condition':
             pen.setStyle(Qt.DashLine)
@@ -73,7 +109,11 @@ class GraphEdge(QGraphicsPathItem):
         else:
             pen.setCapStyle(Qt.FlatCap)
         self.setPen(pen)
-        self.update_position()
+        # 注册到场景自建列表
+
+
+        self.update_position_v2()
+
 
     def update_position(self):
         r1 = self.start_node.sceneBoundingRect()
@@ -103,7 +143,7 @@ class GraphEdge(QGraphicsPathItem):
         self.setPath(path)
 
         # 画箭头
-        angle = line.angle()
+        angle = -line.angle()
         arrow_size = 8
         rad = np.radians(angle)
         delta = QPointF(arrow_size * np.cos(rad + 2.6),
@@ -125,6 +165,126 @@ class GraphEdge(QGraphicsPathItem):
 
         if self.scene() is not None:
             self.scene().addItem(self.arrow)
+
+    def _draw_arrow(self, tip: QPointF, angle: float):
+        """绘制与线条同颜色、同样式、z 值更高的箭头"""
+        rad = np.radians(angle)
+        arrow_size = 8
+        p1 = tip + QPointF(arrow_size * np.cos(rad - 2.6),
+                           arrow_size * np.sin(rad - 2.6))
+        p2 = tip + QPointF(arrow_size * np.cos(rad + 2.6),
+                           arrow_size * np.sin(rad + 2.6))
+        head = QPolygonF([tip, p1, p2])
+
+        # 1. 颜色/样式跟随线条
+        line_pen = self.pen()  # 当前线条的 QPen
+        arrow_brush = QBrush(line_pen.color())  # 填充色 = 线条色
+        arrow_pen = QPen(line_pen.color())  # 画笔复制线条
+        arrow_pen.setStyle(Qt.SolidLine)
+        arrow_pen.setJoinStyle(Qt.MiterJoin)
+
+        # 2. 删除旧箭头
+        if hasattr(self, 'arrow') and self.arrow.scene() == self.scene():
+            self.scene().removeItem(self.arrow)
+
+        # 3. 创建新箭头
+        self.arrow = QGraphicsPolygonItem(head)
+        self.arrow.setBrush(arrow_brush)
+        self.arrow.setPen(arrow_pen)
+        # 关键：z 值高于线条
+        self.arrow.setZValue(self.zValue() + 1)
+        self.scene().addItem(self.arrow)
+
+    def update_position_v2(self):
+        scene = self.scene()
+        if scene is None:
+            return
+
+        # 1. 注册到 scene.edges（仅一次）
+        if not hasattr(scene, 'edges'):
+            scene.edges = []
+        if self not in scene.edges:
+            scene.edges.append(self)
+
+        # 2. 同一束边计数（无序 key）
+        edge_key = tuple(sorted([self.start_node.node_id, self.end_node.node_id]))
+        same_edges = [e for e in scene.edges
+                      if tuple(sorted([e.start_node.node_id, e.end_node.node_id])) == edge_key]
+        index = same_edges.index(self)
+        total = len(same_edges)
+        median = (total - 1) / 2.0
+        base_offset = 50 * (index - median)
+        # 方向符号：A->B 正，B->A 负
+        if self.start_node.node_id < self.end_node.node_id:
+            offset = base_offset
+        else:
+            offset = -base_offset
+
+        # 3. 矩形边框交点（照搬你旧代码）
+        def intersect_rect(rect: QRectF, line: QLineF):
+            poly = [rect.topLeft(), rect.topRight(),
+                    rect.bottomRight(), rect.bottomLeft()]
+            for i in range(4):
+                edge = QLineF(poly[i], poly[(i + 1) % 4])
+                intersect_pt = QPointF()
+                typ = line.intersect(edge, intersect_pt)
+                if typ == QLineF.BoundedIntersection:
+                    return intersect_pt
+            # 保底
+            return line.p1() if line.p1() != rect.center() else line.p2()
+
+        r1 = self.start_node.sceneBoundingRect()
+        r2 = self.end_node.sceneBoundingRect()
+        center_line = QLineF(r1.center(), r2.center())
+        inter_p1 = intersect_rect(r1, center_line)
+        inter_p2 = intersect_rect(r2, center_line)
+
+        # 4. 构造带偏移的二次贝塞尔
+        mid = center_line.pointAt(0.5)
+        normal = QPointF(-center_line.dy(), center_line.dx())
+        if normal.isNull():
+            normal = QPointF(1, 0)
+        normal *= offset / (normal.x() ** 2 + normal.y() ** 2) ** 0.5
+        mid += normal
+
+        path = QPainterPath(inter_p1)
+        path.quadTo(mid, inter_p2)
+        self.setPath(path)
+
+        # 5. 箭头方向沿末端切线
+        angle = -path.angleAtPercent(1.0)
+        self._draw_arrow(inter_p2, angle)
+
+        # 6. 虚线样式
+        pen = self.pen()
+        if self.edge_type == 'condition':
+            pen.setStyle(Qt.DashLine)
+            pen.setColor(QColor(200, 50, 50))
+        else:
+            pen.setStyle(Qt.SolidLine)
+        self.setPen(pen)
+
+        # ---------- 7. 显示文字描述 ----------
+        if self.edge_data:
+            self.label.setPlainText(str(self.edge_data))
+            mid_pt = path.pointAtPercent(0.5)
+            normal = QPointF(-center_line.dy(), center_line.dx())
+            normal /= (normal.x() ** 2 + normal.y() ** 2) ** 0.5
+            label_offset = 15
+            label_pos = mid_pt + normal * label_offset
+            self.label.setPos(label_pos)
+
+            # 背景矩形：比文字大 4 像素
+            rect = self.label.boundingRect()
+            rect.adjust(-4, -4, 4, 4)  # 四周留 4px 边距
+            self.label_bg.setRect(rect)
+            self.label_bg.setPos(label_pos)
+
+            self.label.setVisible(True)
+            self.label_bg.setVisible(True)
+        else:
+            self.label.setVisible(False)
+            self.label_bg.setVisible(False)
 
 
 # ---------------- 视图 ----------------
@@ -180,7 +340,7 @@ class GraphWidget(QGraphicsView):
         # 创建边
         for e in g['edges']:
             if e['from'] in self.nodes and e['to'] in self.nodes:
-                edge = GraphEdge(self.nodes[e['from']], self.nodes[e['to']], edge_type=e.get('type', 'normal'))
+                edge = GraphEdge(self.nodes[e['from']], self.nodes[e['to']], edge_type=e.get('type', 'normal'),data=e.get('data', None))
                 self.edges.append(edge)
                 self.scene.addItem(edge)
 
@@ -277,7 +437,7 @@ class GraphWidget(QGraphicsView):
     def refresh_position(self):
         # 刷新所有边的位置
         for edge in self.edges:
-            edge.update_position()
+            edge.update_position_v2()
 
     # 2. 监听 Ctrl 按键按下/松开，更新 ctrl_pressed 状态
     def keyPressEvent(self, ev):
