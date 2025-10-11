@@ -1,7 +1,9 @@
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QTextEdit, QGroupBox
-
+from PyQt5.QtCore import pyqtSignal
+import json
 
 class NodeDetailView(QWidget):
+    messageState_updated = pyqtSignal(dict)  # 图状态更新信号
     def __init__(self):
         super().__init__()
         layout = QVBoxLayout(self)
@@ -34,11 +36,36 @@ class NodeDetailView(QWidget):
         layout.addWidget(self.info_group)
         layout.addWidget(self.content_group)
 
+
+    def handle_state_update(self, state):
+        """处理来自 WebSocket 的状态更新"""
+        print("agent graph view has Received state update:", state)
+        self.messageState_updated.emit(state)
+
+    def display_node_state(self, state):
+        """显示节点状态"""
+        if not state:
+            return
+        state_str = "\n".join([f"{key}: {value}" for key, value in state.items()])
+        self.content_edit.append(f"\n[状态更新]\n{state_str}\n")
+        node_name = state.get("node", "")
+        node_state = state.get("state", "")
+        state_content = node_state.get("content", "")
+        self.node_name_label.setText(f"节点名称: {node_name if node_name else 'None'}")
+
+        if isinstance(state_content, dict):
+            # 格式化字典内容
+            formatted_content = "\n".join([f"{key}: {value}" for key, value in state_content.items()])
+            self.content_edit.setPlainText(formatted_content)
+        else:
+            self.content_edit.setPlainText(str(state_content))
+
     def display_node_info(self, node_info):
         """显示节点信息"""
         if not node_info:
             self.clear_display()
             return
+
 
         # 更新基本信息
         self.node_id_label.setText(f"节点ID: {node_info.get('id', '')}")
