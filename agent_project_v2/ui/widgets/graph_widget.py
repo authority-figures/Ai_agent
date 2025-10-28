@@ -1,18 +1,25 @@
 from PyQt5.QtWidgets import (QGraphicsView, QGraphicsScene, QGraphicsRectItem, QGraphicsPolygonItem,
                              QGraphicsTextItem,QGraphicsLineItem,QGraphicsItem,QGraphicsEllipseItem,QGraphicsPathItem
                              )
-from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QLineF, QRectF, QPoint, QTimer
+from PyQt5.QtCore import Qt, QPointF, pyqtSignal, QLineF, QRectF, QPoint, QTimer, QObject
 from PyQt5.QtGui import QBrush, QPen, QColor, QFont, QPainter,QPainterPath, QPolygonF, QFontMetrics
 import networkx as nx
 import numpy as np
 from networkx.drawing.nx_agraph import graphviz_layout
 
+
+class GraphNodeSignals(QObject):
+    # 发送节点id以及更新state内容
+    node_double_clicked = pyqtSignal(str)
+
 class GraphNode(QGraphicsRectItem):
     '''
     用于显示langgraph的图结构的节点
     '''
+
     def __init__(self, node_id, name, pos, node_type='normal', width=120, height=60):
         super().__init__(0, 0, width, height)
+        self.signals = GraphNodeSignals()
         self.node_id = node_id
         self.node_type = node_type
         # self.setPos(pos)
@@ -75,6 +82,13 @@ class GraphNode(QGraphicsRectItem):
                 if edge.start_node is self or edge.end_node is self:
                     edge.update_position_v2()
         return super().itemChange(change, value)
+
+    # 重写双击事件（确保只在双击本节点时触发）
+    def mouseDoubleClickEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            # 发送节点ID到场景
+            self.signals.node_double_clicked.emit(self.node_id)
+        super().mouseDoubleClickEvent(event)
 
 
 # ---------------- 边（带箭头） ----------------
@@ -293,6 +307,8 @@ class GraphWidget(QGraphicsView):
     用于显示langgraph的图结构
     '''
     node_selected = pyqtSignal(str)
+    # 发送节点id以及更新state内容
+    node_double_clicked = pyqtSignal(dict)
 
     def __init__(self, graph_structure):
         super().__init__()
@@ -303,6 +319,7 @@ class GraphWidget(QGraphicsView):
         self.scene.setSceneRect(0, 0, 1000, 1000)
 
         self.nodes, self.edges = {}, []
+        self.node_states = {}   # {node_name:{}}
         self.create_graph(graph_structure)
 
         self.ctrl_pressed = False  # Ctrl键状态
@@ -334,6 +351,7 @@ class GraphWidget(QGraphicsView):
             p = transformed_pos.get(node['id'])  # 使用转换后的坐标
 
             n = GraphNode(node['id'], node['name'], p, node_type=node.get('node_type', 'normal'))
+            n.signals.node_double_clicked.connect(self.on_node_double_clicked)
             self.nodes[node['id']] = n
             self.scene.addItem(n)
 
@@ -428,9 +446,17 @@ class GraphWidget(QGraphicsView):
 
     def update_graph_state(self, state):
         cur = state.get('current_node')
+        node_id = state.get('node')
+        self.node_states[node_id] = state
         for nid, node in self.nodes.items():
             node.set_current(nid == cur)
         self.refresh_position()
+
+    def on_node_double_clicked(self, node_id):
+        """处理节点双击事件"""
+        node_info = self.node_states.get(node_id, {})
+        self.node_double_clicked.emit(node_info)
+
 
 
 
@@ -495,6 +521,9 @@ class GraphWidget(QGraphicsView):
     def wheelEvent(self, ev):
         factor = 1.15 if ev.angleDelta().y() > 0 else 1/1.15
         self.scale(factor, factor)
+
+
+
 
 
 # 测试入口

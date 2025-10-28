@@ -208,7 +208,7 @@ class AgentWorker(QThread):
             if resp.status_code == 200:
                 data = resp.json()
                 if data.get("status") == "success":
-                    self.reply_ready.emit(data["data"].get("action_result", "No response"))
+                    self.reply_ready.emit(data["data"].get("AI_answer", "No response"))
                 else:
                     self.error_occurred.emit(data.get("detail", "Unknown error"))
             else:

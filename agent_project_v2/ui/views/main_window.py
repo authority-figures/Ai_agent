@@ -70,15 +70,20 @@ class MainWindow(QMainWindow):
 
         self.setCentralWidget(main_splitter)
         self.agent_chat_view.messageSent.connect(self.handle_agent_reply)
-        self.agent_graph_view.messageState_updated.connect(
-            lambda state_dict:self.agent_chat_view.append_message("Agent", f"Agent状态更新: {state_dict}")
-        )
+        # # 将图状态更新信号连接到聊天视图的槽函数（send state）
+        # self.agent_graph_view.messageState_updated.connect(
+        #     lambda state_dict:self.agent_chat_view.append_message("Agent", f"Agent状态更新: {state_dict}")
+        # )
         # 将图状态更新信号连接到聊天视图的槽函数
+        self.agent_graph_view.messageState_updated.connect(self.node_detail_view.display_node_state)
         self.agent_graph_view.messageState_updated.connect(self.node_detail_view.display_node_state)
         # 将图状态更新信号连接到节点详情视图的槽函数
         self.agent_graph_view.messageState_updated.connect(
             lambda state_dict:self.on_agent_update({**state_dict,"current_node": state_dict.get("node","")})
         )
+
+        self.agent_graph_view.graph_widget.node_double_clicked.connect(self.node_detail_view.display_node_state)
+
         # 连接信号
         # self.agent_graph_view.node_selected.connect(self.on_node_selected)
         # ServiceLocator.get('event_bus').subscribe('agent_state_update', self.on_agent_update)
