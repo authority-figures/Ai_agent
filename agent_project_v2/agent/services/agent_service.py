@@ -4,7 +4,8 @@
 '''
 import traceback
 from langgraph.graph import StateGraph
-from agent.graph.chat_loop_graph import graph as compiled_graph
+# from agent.graph.chat_loop_graph import graph as compiled_graph
+from agent.graph.Interactive_chat_graph import compiled_graph,session1_config
 
 
 class AgentService:
@@ -18,12 +19,12 @@ class AgentService:
 
     def invoke_graph(self, user_input):
         try:
-            result = compiled_graph.invoke({"input": user_input})
+            result = compiled_graph.invoke({"input": user_input,"input_type":"run"},config=session1_config)
         except EOFError:
             # 打印完整堆栈，定位哪一行调了 input()
             traceback.print_exc()
             # 如果想继续跑，可以 return 一个默认值
-            result = {"error": "interactive input not allowed in this environment"}
+            result = {"error in invoke_graph(agent_service)": "interactive input not allowed in this environment"}
         return result
 
     def get_graph_structure(self):

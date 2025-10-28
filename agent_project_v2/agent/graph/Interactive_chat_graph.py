@@ -1,0 +1,59 @@
+from langgraph.checkpoint.sqlite import SqliteSaver
+from langgraph.graph import Graph, END, StateGraph, START
+from langgraph.graph.message import add_messages
+from langchain_core.messages import BaseMessage
+from typing import TypedDict, Annotated, List
+from langchain.schema import AgentAction,HumanMessage,SystemMessage,AIMessage
+from agent_project_v2.agent.llm import chatGPT_llm
+from langchain.tools import tool  # ✅ 直接使用装饰器
+from langgraph.prebuilt import ToolNode, ToolInvocation
+from agent_project_v2.agent.utils import ColorPrinter
+from langgraph.checkpoint.memory import InMemorySaver
+from agent_project_v2.agent.nodes.interactive_graph.state import OverallState
+from agent_project_v2.agent.tools.interactive_graph_tools import get_robot_end_pos_and_ori
+from agent.nodes.interactive_graph.agent_node import AgentNode
+from agent.nodes.interactive_graph.input_node import input_node
+from agent.nodes.interactive_graph.answer_node import answer_node
+from agent.nodes.interactive_graph.tool_node import CustomToolNode
+from agent.nodes.interactive_graph.router import router
+
+memory = InMemorySaver()
+color_printer = ColorPrinter()
+graph = StateGraph(OverallState)
+
+
+
+
+graph.add_node("user_input_node",input_node)
+graph.add_node("agent_node",AgentNode(config={}))
+# graph.add_node("tool_execution_node",tool_execution_node)
+graph.add_node("answer_node",answer_node)
+graph.add_node("tool_execution_node", CustomToolNode(tools=[get_robot_end_pos_and_ori]))
+
+graph.add_edge(START,"user_input_node")
+graph.add_edge("user_input_node","agent_node")
+graph.add_conditional_edges("agent_node",router,{"execute_tools": "tool_execution_node","continue_dialog": "answer_node","exit": END,})
+graph.add_edge("tool_execution_node","agent_node")
+graph.add_edge("answer_node",END)
+
+
+
+compiled_graph = graph.compile(checkpointer=memory)
+
+session1_config = {"configurable": {"thread_id": "session-1"}}
+
+
+if __name__ == '__main__':
+
+    import io
+    import matplotlib.pyplot as plt
+    import matplotlib.image as mpimg
+
+    try:
+        while True:
+            result = compiled_graph.invoke({"messages": [],"AI_answer":""},config=session1_config)
+            if result.get("input", "").strip().lower() in ["exit", "end", "quit"]:
+                print("对话结束。")
+                break
+    except Exception as e:
+        print(f"显示图形时出错: {e}")
