@@ -6,14 +6,14 @@ from typing import TypedDict, Annotated, List
 from langchain.schema import AgentAction,HumanMessage,SystemMessage,AIMessage
 from agent_project_v2.agent.llm import chatGPT_llm
 
-from agent_project_v2.agent.nodes.interactive_graph.state import OverallState
-from agent.tools.interactive_graph_tools import get_robot_end_pos_and_ori
-from agent_project_v2.agent.nodes.node_publisher import send_state
+from agent.nodes.interactive_graph.state import OverallState
+from agent.tools.interactive_graph_tools import using_tools
+from agent.nodes.node_publisher import send_state
 
 
 
 llm = chatGPT_llm(model_name="gpt-4o-mini",temperature=0)
-llm_with_tools = llm.bind_tools([get_robot_end_pos_and_ori])
+llm_with_tools = llm.bind_tools(using_tools)
 system_prompt = "你是一个AI助理,请回答用户的问题,必要时可以使用工具\n"
 
 class AgentNode:

@@ -1,6 +1,6 @@
 # api/graph_info.py (或类似名称)
 from fastapi import APIRouter, HTTPException, Depends
-from agent_project_v2.core.service_locator import ServiceLocator
+from core.service_locator import ServiceLocator
 from agent.services.agent_service import AgentService
 
 router = APIRouter(prefix="/api/graph", tags=["Graph Information"])
@@ -31,10 +31,10 @@ async def invoke_graph(user_input: str, agent_service: AgentService = Depends(ge
     调用Agent图的API端点。
     """
     try:
-        result = agent_service.invoke_graph(user_input)
+        result = await agent_service.invoke_graph(user_input)
         return {
             "status": "success",
             "data": result
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to invoke graph: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"[graph_info:invoke_graph] Failed to invoke graph: {str(e)}")

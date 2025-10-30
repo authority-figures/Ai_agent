@@ -1,0 +1,90 @@
+import aioredis, json, time, uuid
+from datetime import datetime
+from core.task import *
+from typing import List, Optional
+from fastapi import HTTPException
+
+class TaskRepo:
+    def __init__(self, redis_url: str = "redis://localhost"):
+        self.redis = aioredis.from_url(redis_url, decode_responses=True)
+
+    async def create(self,task_name, owner: str, desc: str, ttl: int = 86400) -> dict:
+        try:
+            task_id = f"t-{datetime.now():%y%m%d-%H%M%S}-{uuid.uuid4().hex[:6]}"
+            task = Task(task_id=task_id, task_name=task_name, status="pending",
+                        created_at=int(time.time()),
+                        updated_at=int(time.time()),
+                        owner=owner, description=desc, ttl=ttl)
+            async with self.redis.pipeline() as pipe:
+                await pipe.hset(f"task:{task_id}", mapping=task.to_hdict())
+                await pipe.expire(f"task:{task_id}", ttl)
+                await pipe.execute()
+            print(f"[TaskRepo] created task {task_id}")
+            return {"status":"success","data":{"task_id":task_id,"task_name":task_name}}
+        except Exception as e:
+            print(f"[TaskRepo] create task failed: {e}")
+            raise HTTPException(status_code=500, detail=f"[task_repo] Failed to create task: {str(e)}")
+
+    async def get(self, task_id: str) -> TaskResponse:
+        try:
+            data = await self.redis.hgetall(f"task:{task_id}")
+            dict_data = Task.from_hdict(data) if data else None
+            if dict_data:
+                return TaskResponse(status="success", message=dict_data)
+            else:
+                return TaskResponse(status="error", message=None)
+        except Exception as e:
+            print(f"[TaskRepo] get task failed: {e}")
+            raise HTTPException(status_code=500, detail=f"[task_repo] Failed to get task: {str(e)}")
+
+    async def update_progress(self, task_id: str, percent: int, log_line: str) -> bool:
+        """原子追加进度与日志"""
+        lua = """
+        local key = KEYS[1]
+        local pct = tonumber(ARGV[1])
+        local log = ARGV[2]
+        local now = ARGV[3]
+        local prog = redis.call('HGET', key, 'progress')
+        if not prog then return 0 end
+        local obj = cjson.decode(prog)
+        obj.percent = pct
+        table.insert(obj.log, log)
+        redis.call('HSET', key, 'progress', cjson.encode(obj))
+        redis.call('HSET', key, 'updated_at', now)
+        return 1
+        """
+        ok = await self.redis.eval(lua, 1, f"task:{task_id}", percent, log_line, int(time.time()))
+        return bool(ok)
+
+    async def push_plan(self, task_id: str, plan: List[PlanStep]) -> bool:
+        """Agent2 写 plan"""
+        lua = """
+        local key = KEYS[1]
+        local pl = ARGV[1]
+        local now = ARGV[2]
+        if redis.call('HGET', key, 'status') ~= 'pending' then return 0 end
+        redis.call('HSET', key, 'plan', pl)
+        redis.call('HSET', key, 'status', 'planning')
+        redis.call('HSET', key, 'updated_at', now)
+        return 1
+        """
+        ok = await self.redis.eval(lua, 1, f"task:{task_id}",
+                                   json.dumps([p.dict() for p in plan], ensure_ascii=False),
+                                   int(time.time()))
+        return bool(ok)
+
+
+
+
+
+def create_repo(redis_url: str = "redis://localhost") -> TaskRepo:
+    repo = TaskRepo(redis_url)
+    # res = repo.redis.ping()  # 预热线程池
+    # if not res:
+    #     raise ConnectionError("Failed to connect to Redis [task_repo:create_repo]")
+    return repo
+
+async def create_repo_sync(redis_url: str = "redis://localhost") -> TaskRepo:
+    repo = TaskRepo(redis_url)
+    await repo.redis.ping()  # 预热线程池
+    return repo

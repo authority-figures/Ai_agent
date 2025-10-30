@@ -4,8 +4,11 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 from api.routers.graph_info import router as graph_router
+from api.routers.task_info import router as task_router
+from api.routers.task_info import get_task_repo
 from fastapi.middleware.cors import CORSMiddleware
-from agent_project_v2.core.service_locator import ServiceLocator
+from core.service_locator import ServiceLocator
+
 
 
 
@@ -23,7 +26,7 @@ app.add_middleware(
 
 # 包含 API 路由
 app.include_router(graph_router)   # 注册图结构相关的路由
-
+app.include_router(task_router)    # 注册任务相关的路由
 
 
 
@@ -56,3 +59,17 @@ try:
         print("AgentService not found in ServiceLocator.")
 except Exception as e:
     print(f"Error sending state to AgentService: {e}")
+
+
+try:
+    task_repo = ServiceLocator.get('task_repo')
+    if task_repo:
+        print("TaskRepo found in ServiceLocator.")
+        pass
+    else:
+        print("TaskRepo not found in ServiceLocator.")
+except Exception as e:
+    print(f"Error sending state to TaskRepo: {e}")
+
+
+pass

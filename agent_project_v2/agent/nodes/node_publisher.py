@@ -1,4 +1,4 @@
-from agent_project_v2.core.service_locator import ServiceLocator
+from core.service_locator import ServiceLocator
 import asyncio, threading
 
 # def send_state(node_name, state):

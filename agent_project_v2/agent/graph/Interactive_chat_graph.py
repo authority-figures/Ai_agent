@@ -1,20 +1,13 @@
 from langgraph.checkpoint.sqlite import SqliteSaver
 from langgraph.graph import Graph, END, StateGraph, START
-from langgraph.graph.message import add_messages
-from langchain_core.messages import BaseMessage
-from typing import TypedDict, Annotated, List
-from langchain.schema import AgentAction,HumanMessage,SystemMessage,AIMessage
-from agent_project_v2.agent.llm import chatGPT_llm
-from langchain.tools import tool  # ✅ 直接使用装饰器
-from langgraph.prebuilt import ToolNode, ToolInvocation
+
 from agent_project_v2.agent.utils import ColorPrinter
 from langgraph.checkpoint.memory import InMemorySaver
 from agent_project_v2.agent.nodes.interactive_graph.state import OverallState
-from agent_project_v2.agent.tools.interactive_graph_tools import get_robot_end_pos_and_ori
 from agent.nodes.interactive_graph.agent_node import AgentNode
 from agent.nodes.interactive_graph.input_node import input_node
 from agent.nodes.interactive_graph.answer_node import answer_node
-from agent.nodes.interactive_graph.tool_node import CustomToolNode
+from agent.nodes.interactive_graph.tool_node import tool_node
 from agent.nodes.interactive_graph.router import router
 
 memory = InMemorySaver()
@@ -28,7 +21,7 @@ graph.add_node("user_input_node",input_node)
 graph.add_node("agent_node",AgentNode(config={}))
 # graph.add_node("tool_execution_node",tool_execution_node)
 graph.add_node("answer_node",answer_node)
-graph.add_node("tool_execution_node", CustomToolNode(tools=[get_robot_end_pos_and_ori]))
+graph.add_node("tool_execution_node", tool_node)
 
 graph.add_edge(START,"user_input_node")
 graph.add_edge("user_input_node","agent_node")

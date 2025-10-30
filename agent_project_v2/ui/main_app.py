@@ -9,6 +9,7 @@ import multiprocessing
 import time
 import socket
 
+
 os.environ["QT_IM_MODULE"] = "fcitx"
 
 
@@ -41,11 +42,18 @@ def run_fastapi_app():
     logger.info("Initializing services...")
 
     try:
-        from agent_project_v2.core.service_locator import ServiceLocator
+        from core.service_locator import ServiceLocator
         from agent.services.agent_service import AgentService
+        from agent.services.task_repo import TaskRepo, create_repo
+
+        # 初始化task repo
+        repo = create_repo("redis://localhost")
+        ServiceLocator.register('task_repo', repo)
+        logger.info("TaskRepo registered successfully")
 
         # 初始化AgentService
-        agent_service = AgentService()
+        from agent.graph.Interactive_chat_graph import compiled_graph as Interactive_chat_compiled_graph
+        agent_service = AgentService(compiled_graph=Interactive_chat_compiled_graph)
         ServiceLocator.register('agent_service', agent_service)
 
         logger.info("AgentService registered successfully")
@@ -80,7 +88,7 @@ def run_fastapi_app():
                 print("❌ Backend did NOT start in debug mode")
 
 
-def initialize_services():
+async def initialize_services():
     """
     初始化核心服务并注册到ServiceLocator
     """
@@ -89,6 +97,10 @@ def initialize_services():
     try:
         from core.service_locator import ServiceLocator
         from agent.services.agent_service import AgentService
+        from agent.services.task_repo import TaskRepo, create_repo
+        # 初始化task repo
+        repo = await create_repo("redis://localhost")
+        ServiceLocator.register('task_repo', repo)
 
         # 初始化AgentService
         agent_service = AgentService()

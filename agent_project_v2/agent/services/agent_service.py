@@ -6,20 +6,21 @@ import traceback
 from langgraph.graph import StateGraph
 # from agent.graph.chat_loop_graph import graph as compiled_graph
 from agent.graph.Interactive_chat_graph import compiled_graph,session1_config
-
+from langgraph.graph.state import CompiledStateGraph
 
 class AgentService:
     """一个专门用于提供智能体相关功能的服务"""
-    def __init__(self):
+    def __init__(self,compiled_graph: CompiledStateGraph=None):
         self.connections = set()
+        self.compiled_graph = compiled_graph
 
     def set_connection_pool(self, connections):
         '''从 FastAPI 注入 WebSocket 连接池'''
         self.connections = connections
 
-    def invoke_graph(self, user_input):
+    async def invoke_graph(self, user_input):
         try:
-            result = compiled_graph.invoke({"input": user_input,"input_type":"run"},config=session1_config)
+            result = await self.compiled_graph.ainvoke({"input": user_input,"input_type":"run"},config=session1_config)
         except EOFError:
             # 打印完整堆栈，定位哪一行调了 input()
             traceback.print_exc()
@@ -41,7 +42,7 @@ class AgentService:
 
         # 方法2: 手动构建图结构信息（通用方法）
         # 这里需要根据你编译的图对象实际结构来调整
-        graph_obj = compiled_graph.get_graph()  # 获取内部图表示
+        graph_obj = self.compiled_graph.get_graph()  # 获取内部图表示
 
         nodes = []
         edges = []
