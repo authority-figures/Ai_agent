@@ -19,6 +19,11 @@ class TaskRepo:
                 await pipe.hset(f"task:{task_id}", mapping=task.to_hdict())
                 await pipe.expire(f"task:{task_id}", ttl)
                 await pipe.execute()
+
+            # 注意：publish 不能放在 pipeline 里（管道适合批量写操作，publish 是即时通知）
+            # 发布任务创建消息，通知plan agent（如任务调度器）
+            await self.redis.publish("task_channel", task_id)
+
             print(f"[TaskRepo] created task {task_id}")
             return {"status":"success","data":{"task_id":task_id,"task_name":task_name}}
         except Exception as e:

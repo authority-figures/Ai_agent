@@ -5,9 +5,11 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from api.routers.graph_info import router as graph_router
 from api.routers.task_info import router as task_router
+from api.routers import plan_info
 from api.routers.task_info import get_task_repo
 from fastapi.middleware.cors import CORSMiddleware
 from core.service_locator import ServiceLocator
+import asyncio
 
 
 
@@ -72,4 +74,18 @@ except Exception as e:
     print(f"Error sending state to TaskRepo: {e}")
 
 
-pass
+# 在 FastAPI 启动时注册
+# @app.on_event("startup")
+# async def startup_event():
+#     # 启动 plan_agent_listener 协程，不阻塞主事件循环
+#     asyncio.create_task(plan_agent_listener())
+#
+#     print("Startup event completed.")
+
+@app.on_event("startup")
+async def startup_event():
+    await plan_info.startup_event()
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await plan_info.shutdown_event()

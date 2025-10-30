@@ -55,8 +55,12 @@ def run_fastapi_app():
         from agent.graph.Interactive_chat_graph import compiled_graph as Interactive_chat_compiled_graph
         agent_service = AgentService(compiled_graph=Interactive_chat_compiled_graph)
         ServiceLocator.register('agent_service', agent_service)
-
         logger.info("AgentService registered successfully")
+
+        from agent.graph.plan_graph import compiled_graph as plan_compiled_graph
+        plan_agent_service = AgentService(compiled_graph=plan_compiled_graph)
+        ServiceLocator.register('plan_agent_service', plan_agent_service)
+        logger.info("Plan AgentService registered successfully")
 
         # 这里可以初始化其他服务...
         # from services.simulation_service import SimulationService
