@@ -10,6 +10,7 @@ from agent_graph_view import AgentGraphView
 from node_detail_view import NodeDetailView
 from chat_history_view import ChatHistoryView
 from agent_chat_view import AgentChatView, AgentWorker
+from task_info_view import TaskInfoView
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -34,9 +35,20 @@ class MainWindow(QMainWindow):
         # 右侧上部：Agent工作流视图（占50%高度）
         # 包含对话视图和节点图
         top_splitter = QSplitter(Qt.Vertical)
+
         self.agent_chat_view = AgentChatView()
+        self.task_info_view = TaskInfoView()
+        chat_task_splitter = QSplitter(Qt.Horizontal)
+        chat_task_splitter.addWidget(self.agent_chat_view)
+        chat_task_splitter.addWidget(self.task_info_view)
+        # 设置拉伸比例
+        chat_task_splitter.setStretchFactor(0, 8)  # agent_chat_view 占3份
+        chat_task_splitter.setStretchFactor(1, 2)  # task_info_view 占2份
+        self.task_info_view.setMinimumWidth(100)
+        # top_splitter.addWidget(self.agent_chat_view)
+        top_splitter.insertWidget(0,chat_task_splitter)
+
         self.agent_graph_view = AgentGraphView()
-        top_splitter.addWidget(self.agent_chat_view)
         agent_graph_view_splitter = QSplitter(Qt.Horizontal)
         agent_graph_view_splitter.addWidget(self.agent_graph_view)
         # 节点详情视图（占30%高度）

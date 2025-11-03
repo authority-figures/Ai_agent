@@ -65,8 +65,10 @@ async def push_plan(task_id:str,plan:List[PlanStep])-> bool:
     """
     url = f"http://localhost:8000/api/tasks/{task_id}/plan"
     try:
+        # 将 plan 转换为 JSON
+        plan_data = [step.model_dump() for step in plan]
         async with httpx.AsyncClient() as client:
-            response = await client.put(url, params={"task_id": task_id})
+            response = await client.put(url, json=plan_data)
             if response.status_code == 200:
                 data = response.json()
                 return data

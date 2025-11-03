@@ -8,7 +8,6 @@ from core.service_locator import ServiceLocator
 from agent.graph.plan_graph import session1_config
 
 
-
 router = APIRouter(prefix="/api/plan", tags=["plan Information"])
 
 # 全局变量以确保引用不被GC回收
