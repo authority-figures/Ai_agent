@@ -6,6 +6,7 @@ import logging
 from api.routers.graph_info import router as graph_router
 from api.routers.task_info import router as task_router
 from api.routers import plan_info
+from api.routers import executor_info
 from api.routers.task_info import get_task_repo
 from fastapi.middleware.cors import CORSMiddleware
 from core.service_locator import ServiceLocator
@@ -84,8 +85,13 @@ except Exception as e:
 
 @app.on_event("startup")
 async def startup_event():
+    # 启动plan agentd的监听
     await plan_info.startup_event()
+    await executor_info.startup_event()
 
 @app.on_event("shutdown")
 async def shutdown_event():
     await plan_info.shutdown_event()
+    await executor_info.shutdown_event()
+
+

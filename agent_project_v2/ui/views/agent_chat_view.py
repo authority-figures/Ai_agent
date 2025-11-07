@@ -103,6 +103,7 @@ class AgentChatView(QWidget):
 
         self.input_field = QLineEdit()
         self.input_field.setPlaceholderText("Type a message to the agent...")
+        # self.input_field.setInputMethodHints(self.input_field.inputMethodHints() | Qt.ImhPreferLatin | Qt.ImhAllowLatin)
         self.input_field.returnPressed.connect(self.send_message)
         self.input_field.setStyleSheet("""
             QLineEdit {

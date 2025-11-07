@@ -62,21 +62,34 @@ class TaskRepo:
         return bool(ok)
 
     async def push_plan(self, task_id: str, plan: List[PlanStep]) -> bool:
-        """Agent2 写 plan"""
-        lua = """
-        local key = KEYS[1]
-        local pl = ARGV[1]
-        local now = ARGV[2]
-        if redis.call('HGET', key, 'status') ~= 'pending' then return 0 end
-        redis.call('HSET', key, 'plan', pl)
-        redis.call('HSET', key, 'status', 'planning')
-        redis.call('HSET', key, 'updated_at', now)
-        return 1
-        """
-        ok = await self.redis.eval(lua, 1, f"task:{task_id}",
-                                   json.dumps([p.dict() for p in plan], ensure_ascii=False),
-                                   int(time.time()))
-        return bool(ok)
+        """Agent2 写 plan，并发布到 plan_channel"""
+        try:
+            lua = """
+            local key = KEYS[1]
+            local pl = ARGV[1]
+            local now = ARGV[2]
+            if redis.call('HGET', key, 'status') ~= 'pending' then return 0 end
+            redis.call('HSET', key, 'plan', pl)
+            redis.call('HSET', key, 'status', 'planning')
+            redis.call('HSET', key, 'updated_at', now)
+            return 1
+            """
+            # 将 plan 转换为 JSON
+            plan_data = json.dumps([p.dict() for p in plan], ensure_ascii=False)
+
+            # 执行 Redis Lua 脚本
+            ok = await self.redis.eval(lua, 1, f"task:{task_id}", plan_data, int(time.time()))
+            if ok:
+                # 发布计划到计划频道，通知计划制定完成
+                await self.redis.publish("plan_channel", task_id)
+                print(f"[TaskRepo] Plan for task {task_id} pushed and published to plan_channel")
+                return True
+            else:
+                print(f"[TaskRepo] Failed to push plan for task {task_id}")
+                return False
+        except Exception as e:
+            print(f"[TaskRepo] Error in push_plan: {e}")
+            return False
 
 
 

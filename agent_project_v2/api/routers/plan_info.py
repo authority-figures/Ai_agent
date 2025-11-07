@@ -3,7 +3,6 @@ import aioredis
 from fastapi import APIRouter, HTTPException, Depends
 from core.service_locator import ServiceLocator
 from agent.services.agent_service import AgentService
-from agent.services.agent_service import AgentService
 from core.service_locator import ServiceLocator
 from agent.graph.plan_graph import session1_config
 
