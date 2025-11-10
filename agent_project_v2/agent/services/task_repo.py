@@ -66,14 +66,37 @@ class TaskRepo:
         try:
             lua = """
             local key = KEYS[1]
-            local pl = ARGV[1]
+            local pl = ARGV[1]          -- plan JSON
             local now = ARGV[2]
-            if redis.call('HGET', key, 'status') ~= 'pending' then return 0 end
+
+            -- 1. 状态校验
+            if redis.call('HGET', key, 'status') ~= 'pending' then
+                return 0
+            end
+
+            -- 2. 写 plan
             redis.call('HSET', key, 'plan', pl)
+
+            -- 3. 生成 execution 数组（与 plan 一一对应）
+            local planObj = cjson.decode(pl)
+            local execArr = {}
+            for i = 1, #planObj do
+                local step = planObj[i]
+                execArr[i] = {
+                    id          = step.id,
+                    step_status = "pending",
+                    log         = {os.date("%Y-%m-%d %H:%M:%S").." [INFO] 随plan创建初始化"}
+                }
+            end
+            redis.call('HSET', key, 'execution', cjson.encode(execArr))
+
+            -- 4. 改状态 & 时间戳
             redis.call('HSET', key, 'status', 'planning')
             redis.call('HSET', key, 'updated_at', now)
+
             return 1
             """
+
             # 将 plan 转换为 JSON
             plan_data = json.dumps([p.dict() for p in plan], ensure_ascii=False)
 
