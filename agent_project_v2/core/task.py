@@ -9,6 +9,13 @@ class PlanStep(BaseModel):
     param: dict = Field(default_factory=dict)
     depends: List[str] = Field(default_factory=list)
 
+class ExecutionStep(BaseModel):
+    id: str
+    action: str
+    param: dict = Field(default_factory=dict)
+    status: str = "pending"   # pending | finished | failed | cancelled
+    log: List[str] = Field(default_factory=list)
+
 class Progress(BaseModel):
     current_step: int = 0
     percent: int = 0
@@ -28,6 +35,7 @@ class Task(BaseModel):
     owner: str = ""
     description: str = ""
     plan: Optional[List[PlanStep]] = None
+    execution: Optional[List[ExecutionStep]] = None
     progress: Optional[Progress] = None
     result: Optional[Result] = None
     ttl: int = 86400
@@ -63,7 +71,7 @@ class Task(BaseModel):
             if v == "null":
                 # 将 "null" 转回 None
                 data[k] = None
-            elif k in {"plan", "progress", "result"}:
+            elif k in {"plan", "execution", "progress", "result"}:
                 # 反序列化字典/列表
                 data[k] = json.loads(v)
         return Task(**data)
