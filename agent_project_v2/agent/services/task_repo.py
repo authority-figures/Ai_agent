@@ -62,46 +62,39 @@ class TaskRepo:
         return bool(ok)
 
     async def push_plan(self, task_id: str, plan: List[PlanStep]) -> bool:
-        """Agent2 写 plan，并发布到 plan_channel"""
+        """Agent2 写 plan，并发布到 plan_channel，同时初始化 execution 字段"""
         try:
             lua = """
             local key = KEYS[1]
-            local pl = ARGV[1]          -- plan JSON
-            local now = ARGV[2]
-
-            -- 1. 状态校验
-            if redis.call('HGET', key, 'status') ~= 'pending' then
-                return 0
-            end
-
-            -- 2. 写 plan
+            local pl = ARGV[1]
+            local execution = ARGV[2]
+            local now = ARGV[3]
+            if redis.call('HGET', key, 'status') ~= 'pending' then return 0 end
             redis.call('HSET', key, 'plan', pl)
-
-            -- 3. 生成 execution 数组（与 plan 一一对应）
-            local planObj = cjson.decode(pl)
-            local execArr = {}
-            for i = 1, #planObj do
-                local step = planObj[i]
-                execArr[i] = {
-                    id          = step.id,
-                    step_status = "pending",
-                    log         = {os.date("%Y-%m-%d %H:%M:%S").." [INFO] 随plan创建初始化"}
-                }
-            end
-            redis.call('HSET', key, 'execution', cjson.encode(execArr))
-
-            -- 4. 改状态 & 时间戳
+            redis.call('HSET', key, 'execution', execution)  -- 设置 execution 字段
             redis.call('HSET', key, 'status', 'planning')
             redis.call('HSET', key, 'updated_at', now)
-
             return 1
             """
-
             # 将 plan 转换为 JSON
             plan_data = json.dumps([p.dict() for p in plan], ensure_ascii=False)
 
+            # 初始化 execution 字段
+            execution_data = []
+            for step in plan:
+                execution_data.append({
+                    "id": step.id,
+                    "action":step.action,
+                    "step_status": "pending",  # 初始化为 pending
+                    "log": [f"{datetime.now():%Y-%m-%d %H:%M:%S} [INFO] 随plan创建初始化"]
+                })
+
+            # 将 execution 转换为 JSON
+            execution_data_json = json.dumps(execution_data, ensure_ascii=False)
+
             # 执行 Redis Lua 脚本
-            ok = await self.redis.eval(lua, 1, f"task:{task_id}", plan_data, int(time.time()))
+            ok = await self.redis.eval(lua, 1, f"task:{task_id}", plan_data, execution_data_json, int(time.time()))
+
             if ok:
                 # 发布计划到计划频道，通知计划制定完成
                 await self.redis.publish("plan_channel", task_id)
@@ -113,7 +106,6 @@ class TaskRepo:
         except Exception as e:
             print(f"[TaskRepo] Error in push_plan: {e}")
             return False
-
 
 
 
