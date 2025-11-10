@@ -12,7 +12,6 @@ class PlanStep(BaseModel):
 class ExecutionStep(BaseModel):
     id: str
     action: str
-    param: dict = Field(default_factory=dict)
     status: str = "pending"   # pending | finished | failed | cancelled
     log: List[str] = Field(default_factory=list)
 
