@@ -34,6 +34,10 @@ class SimulationEnvironment:
         self.is_running = False
         self.simulation_thread = None
 
+        # self.simulation_callbacks = []  # 存储热插入的回调函数
+        self.simulation_callbacks = {}  # 使用字典存储回调，键是回调的标识符
+
+
 
 
     def clear_env(self):
@@ -606,6 +610,12 @@ class SimulationEnvironment:
     def _step_simulation(self):
         """执行一步仿真"""
         p.stepSimulation()
+        # 创建字典副本来避免在迭代时修改字典
+        callbacks_copy = list(self.simulation_callbacks.values())
+        # 执行所有注册的回调函数（热插入的自定义操作）
+        for callback in callbacks_copy:
+            callback()
+
         self.simulation_time += 1 / 240
 
     def disconnect(self):
@@ -613,6 +623,23 @@ class SimulationEnvironment:
         self.stop_simulation()
         p.disconnect(self.physics_client)
 
+    def add_simulation_callback(self, callback, callback_id):
+        """动态添加回调函数并通过唯一的标识符进行管理"""
+        if callable(callback):
+            self.simulation_callbacks[callback_id] = callback
+        else:
+            raise ValueError("callback must be callable")
+
+    def remove_simulation_callback(self, callback_id):
+        """移除指定标识符的回调函数"""
+        if callback_id in self.simulation_callbacks:
+            del self.simulation_callbacks[callback_id]
+        else:
+            print(f"Warning: Callback with ID {callback_id} not found in the list.")
+
+    def remove_all_DebugItems(self):
+        """移除所有调试项"""
+        p.removeAllUserDebugItems()
 
 
 def test_ompl():

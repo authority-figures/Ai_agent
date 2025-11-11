@@ -138,14 +138,24 @@ async def show_tcp_axis(request: dict):
     """ API: 向仿真环境添加物体 """
     try:
         ifshow = request.get("ifshow", True)
-        if sim_env.robot_list.__len__() ==0:
+        if len(sim_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
+
+        # 定义回调函数
+        def show_tcp():
+            sim_env.robot_list[0].show_link_sys(linkIndex=5, lifetime=-1, type=1, name="tcp")
+
+        # 唯一标识符
+        callback_id = "show_tcp"
+
+        # 动态添加或移除回调
         if ifshow:
-            sim_env.robot_list[0].show_link_sys(linkIndex=5,lifetime=-1,type=1,name="tcp")
+            sim_env.add_simulation_callback(show_tcp, callback_id)
         else:
-            if not sim_env.robot_list[0].debug_lines.get("tcp"):
-                sim_env.robot_list[0].debug_lines["tcp"] = {}
-        # sim_env.show_axis(ifshow=ifshow)
+            sim_env.remove_all_DebugItems()
+
+            sim_env.remove_simulation_callback(callback_id)
+
         return {"status": "success"}
     except Exception as e:
         print("[execution:simulation:api:show_axis] Error showing axis:", e)

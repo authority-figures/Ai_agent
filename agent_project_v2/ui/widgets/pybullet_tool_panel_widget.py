@@ -124,7 +124,7 @@ class ArmToolPage(QWidget):
         # 创建按钮
         self.get_tcp_btn = QPushButton("获取机械臂TCP坐标")
         self.get_end_effector_btn = QPushButton("获取机械臂末端关节坐标")
-        self.show_tcp_axis_btn = QPushButton("显示TCP坐标系轴")
+        self.show_tcp_axis_btn = QPushButton("显示TCP坐标轴")
 
 
         # 坐标信息显示窗口
@@ -327,7 +327,7 @@ class ArmToolPage(QWidget):
     def on_show_tcp_axis_btn_clicked(self):
         """显示TCP坐标系轴的按钮事件"""
 
-        if self.show_tcp_axis_btn.text() == "显示TCP坐标系轴":
+        if self.show_tcp_axis_btn.text() == "显示TCP坐标轴":
             self.show_tcp_axis_btn.setText("隐藏TCP坐标轴")
             self.show_tcp_axis_changed.emit(True)
         else:
