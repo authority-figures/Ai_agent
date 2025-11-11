@@ -50,10 +50,10 @@ async def executor_listener(executor_service: AgentService):
                         }, config=session1_config)
 
         except (asyncio.CancelledError, GeneratorExit):
-            print("[ExecutorAgent] Listener cancelled, exiting gracefully...")
+            print("[Executor_info:executor_listener:ExecutorAgent] Listener cancelled, exiting gracefully...")
             break
         except Exception as e:
-            print(f"[ExecutorAgent] Error: {e}, retrying in 3 seconds...")
+            print(f"[Executor_info:executor_listener:ExecutorAgent] Error: {e}, retrying in 3 seconds...")
             await asyncio.sleep(3)
 
 

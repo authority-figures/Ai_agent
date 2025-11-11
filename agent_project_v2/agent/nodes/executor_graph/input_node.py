@@ -23,4 +23,4 @@ async def input_node(state: OverallState):
 
     # task_text = Task.from_hdict()
     prompt = f"请你依据任务表的plan内容以及执行情况，开始执行每个step: \n{task}\n"
-    return {"input":"","messages": HumanMessage(content=prompt),"task":task}
+    return {"input":"","task":task}

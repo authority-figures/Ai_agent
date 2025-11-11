@@ -1,8 +1,11 @@
+import json
 
 from langgraph.prebuilt import ToolNode, ToolInvocation
 from agent.nodes.node_publisher import send_state
-from agent.tools.simulation_tools import using_tools
-
+from agent.tools.simulation_tools import using_tools as exec_using_tools
+from agent.tools.exec_graph_tools import using_tools as write_using_tools
+from agent.nodes.executor_graph.state import OverallState
+from core.task import ExecutionStep
 
 class CustomToolNode:
     def __init__(self, tools, pre_fn=None, post_fn=None):
@@ -10,13 +13,13 @@ class CustomToolNode:
         self.pre_fn = pre_fn
         self.post_fn = post_fn
 
-    async def __call__(self, state: dict):
+    async def __call__(self, state: OverallState):
         if self.pre_fn:
-            state = self.pre_fn(state)
+            state = await self.pre_fn(state)
 
         try:
             # state = self.tool_node.invoke(state)
-            state = await self.tool_node.ainvoke(state)
+            tool_message = await self.tool_node.ainvoke(state)
 
         except Exception as e:
             print(f"Tool execution error: {e}")
@@ -24,14 +27,50 @@ class CustomToolNode:
             raise e
 
         if self.post_fn:
-            state = self.post_fn(state)
+            state["messages"] = state.get("messages", []) + tool_message['messages']
+            state = await self.post_fn(state)
+            return state
 
         # content = state.get("messages", ["none"])[-1].content if state.get("messages") else "none"
-        return state
+        return {"messages": tool_message}
+
+
+async def post_fn_exec(state: dict):
+    # 假设任务在 state 中，并且你有 task_data 字段
+    task = state.get("task")
+    tool_message = state.get("messages", [])[-1] if state.get("messages") else None
+    if tool_message:
+        # 获取 ExecutionStep
+        state["exec_tool_messages"] = tool_message
+    return state
 
 
 
-tool_node = CustomToolNode(tools=using_tools)  # 初始化时传入工具列表
+exec_tool_node = CustomToolNode(tools=exec_using_tools,post_fn=post_fn_exec)  # 初始化时传入工具列表
 
+
+async def post_fn_write(state: dict):
+    # 假设任务在 state 中，并且你有 task_data 字段
+    task = state.get("task")
+    tool_message = state.get("messages", [])[-1] if state.get("messages") else None
+    state["write_tool_messages"] = tool_message
+    if tool_message:
+        # 获取 ExecutionStep
+        execution_step = tool_message.content  # 假设工具返回的内容 str
+        # 修正字符串：将单引号替换为双引号，并处理嵌套的列表
+        if execution_step:
+            execution_step_json = json.loads(execution_step)
+            execution_step = ExecutionStep.parse_obj(execution_step_json)
+
+            # 将 ExecutionStep 添加到 task 的 execution 字段
+            result = task.update_execution(execution_step)
+            if not result:
+                raise ValueError("执行了计划外的任务步骤，无法更新任务的 execution 字段。")
+            state["task"] = task
+    return state
+
+
+
+write_tool_node = CustomToolNode(tools=write_using_tools,post_fn=post_fn_write)  # 初始化时传入工具列表
 
 

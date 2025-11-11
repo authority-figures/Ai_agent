@@ -22,3 +22,6 @@ class OverallState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     action_result: list  # 存储工具调用结果
     tool_calls: list # 存储工具调用
+    task_pushed: bool
+    exec_tool_messages: Annotated[List[BaseMessage], add_messages]
+    write_tool_messages: Annotated[List[BaseMessage], add_messages]

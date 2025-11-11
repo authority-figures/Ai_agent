@@ -107,6 +107,37 @@ class TaskRepo:
             print(f"[TaskRepo] Error in push_plan: {e}")
             return False
 
+    async def update_task(self, task_id: str, updated_task: Task) -> bool:
+        """更新指定任务的数据"""
+        try:
+            # 获取现有任务的数据
+            existing_task_data = await self.redis.hgetall(f"task:{task_id}")
+            if not existing_task_data:
+                raise HTTPException(404, detail=f"Task {task_id} not found")
+
+            # 反序列化现有的任务数据
+            existing_task = Task.from_hdict(existing_task_data)
+
+            # 更新现有任务的字段
+            existing_task.task_name = updated_task.task_name
+            existing_task.description = updated_task.description
+            existing_task.status = updated_task.status
+            existing_task.plan = updated_task.plan
+            existing_task.execution = updated_task.execution
+            existing_task.updated_at = int(time.time())  # 更新时间戳
+
+            # 将更新后的任务数据存回 Redis
+            await self.redis.hset(f"task:{task_id}", mapping=existing_task.to_hdict())
+
+            # 发布任务更新通知（如果需要）
+            await self.redis.publish("task_channel", task_id)
+
+            print(f"[TaskRepo] Task {task_id} updated successfully.")
+            return True
+        except Exception as e:
+            print(f"[TaskRepo] Error in update_task: {e}")
+            return False
+
 
 
 

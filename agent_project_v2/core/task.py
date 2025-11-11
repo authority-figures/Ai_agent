@@ -76,6 +76,22 @@ class Task(BaseModel):
         return Task(**data)
 
 
+    def update_execution(self, step: ExecutionStep):
+        """更新执行步骤，检查是否已经存在该步骤，如果存在就更新，否则添加新步骤"""
+        # 查找是否存在相同 ID 的执行步骤
+        for existing_step in self.execution:
+            if existing_step.id == step.id:
+                # 如果存在，更新该步骤的状态和日志
+                existing_step.status = step.status
+                existing_step.log = step.log
+                return True
+        # 如果不存在，添加新的执行步骤
+        # self.execution.append(step)
+        return False
+
+
+
+
 
 # 定义响应模型（包含 status 和 data 字段）
 class TaskResponse(BaseModel):

@@ -9,10 +9,12 @@ from langgraph.graph import Graph, END, StateGraph, START
 from agent.utils import ColorPrinter
 from langgraph.checkpoint.memory import InMemorySaver
 from agent.nodes.executor_graph.state import OverallState
-from agent.nodes.executor_graph.agent_node import AgentNode
+from agent.nodes.executor_graph.execute_step_agent_node import AgentNode as execute_step_AgentNode
+from agent.nodes.executor_graph.write_step_agent_node import AgentNode as write_step_AgentNode
 from agent.nodes.executor_graph.input_node import input_node
-from agent.nodes.executor_graph.tool_node import tool_node
-from agent.nodes.executor_graph.router import router
+from agent.nodes.executor_graph.tool_node import exec_tool_node,write_tool_node
+from agent.nodes.executor_graph.router import router_executor, router_writter
+from agent.nodes.executor_graph.push_task_node import push_task_node
 
 memory = InMemorySaver()
 color_printer = ColorPrinter()
@@ -22,15 +24,21 @@ graph = StateGraph(OverallState)
 
 
 graph.add_node("user_input_node",input_node)
-graph.add_node("agent_node",AgentNode(config={}))
+graph.add_node("execute_step_agent",execute_step_AgentNode(config={}))
+graph.add_node("write_step_agent",write_step_AgentNode(config={}))
 # graph.add_node("tool_execution_node",tool_execution_node)
-
-graph.add_node("tool_execution_node", tool_node)
+graph.add_node("exec_tool_node", exec_tool_node)
+graph.add_node("write_tool_node", write_tool_node)
+graph.add_node("push_task_node", push_task_node)
 
 graph.add_edge(START,"user_input_node")
-graph.add_edge("user_input_node","agent_node")
-graph.add_conditional_edges("agent_node",router,{"execute_tools": "tool_execution_node","exit": END,})
-graph.add_edge("tool_execution_node","agent_node")
+graph.add_edge("user_input_node","execute_step_agent")
+graph.add_conditional_edges("execute_step_agent",router_executor,{"execute_tools": "exec_tool_node","exit": "write_step_agent",})
+graph.add_edge("exec_tool_node","write_step_agent")
+
+graph.add_edge("write_tool_node","push_task_node")
+graph.add_edge("push_task_node","execute_step_agent")
+graph.add_conditional_edges("write_step_agent",router_writter,{"execute_tools": "write_tool_node","exit": END,})
 # graph.add_edge("answer_node",END)
 
 

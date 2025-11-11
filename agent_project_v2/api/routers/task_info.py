@@ -104,3 +104,22 @@ async def delete_all_tasks(repo: TaskRepo = Depends(get_task_repo)) -> dict:
     except Exception as e:
         raise HTTPException(500, detail=f"Failed to delete all tasks: {e}" )
 
+
+
+@router.put("/{task_id}/update")
+async def update_task_api(
+    task_id: str,
+    updated_task: Task,  # 更新的 task 对象
+    repo: TaskRepo = Depends(get_task_repo)
+) -> dict:
+    """
+    更新指定任务的所有数据
+    """
+    try:
+        # 调用 TaskRepo 中的更新方法
+        success = await repo.update_task(task_id, updated_task)
+        if not success:
+            raise HTTPException(400, detail="Failed to update task")
+        return {"status": "success", "task_id": task_id}
+    except Exception as e:
+        raise HTTPException(500, detail=f"Error updating task: {e}")
