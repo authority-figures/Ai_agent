@@ -1,3 +1,10 @@
+# run_pybullet_service.py
+import uvicorn
+
+import threading
+import time
+
+
 from fastapi import FastAPI,Request
 from pydantic import BaseModel
 from execution.simulation.environment import SimulationEnvironment
@@ -130,3 +137,25 @@ def start_api_server():
     """ 启动 API 服务器 """
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8001)
+
+
+
+
+
+
+
+
+
+def run_pybullet_service():
+    """ 启动PyBullet仿真服务 """
+    # simulation_thread = threading.Thread(target=run_simulation, daemon=True)
+    # simulation_thread.start()
+    # sim_env.initialize()
+    uvicorn.run(app, host="127.0.0.1", port=8001,
+                reload=False,
+                log_level="info",
+                loop="asyncio",
+                )  # 设置为8001端口运行
+
+if __name__ == "__main__":
+    run_pybullet_service()

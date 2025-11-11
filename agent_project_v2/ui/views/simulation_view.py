@@ -1,3 +1,4 @@
+import asyncio
 import sys
 import time
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
@@ -186,7 +187,7 @@ class SimulationView(QWidget):
                 border-radius: 0px;
 
                 /* ---- 内发光（Qt 支持 box-shadow） ---- */
-                box-shadow: inset 0 0 8px rgba(100, 150, 255, 0.25);
+                /*box-shadow: inset 0 0 8px rgba(100, 150, 255, 0.25);*/
 
                 /* ---- 顶部彩色条：4 px 渐变蓝 ---- */
                 border-top: 4px solid qlineargradient(
@@ -282,6 +283,7 @@ class SimulationView(QWidget):
         # 启动PyBullet仿真
         self.pybullet_process = PyBulletProcess()
         self.pybullet_process.start()
+        self.env_loop = self.pybullet_process.loop
 
         # 初始化嵌入工具
         self.embedder = PyBulletEmbedder(self.container,self.pybullet_process.env_title)
@@ -302,13 +304,34 @@ class SimulationView(QWidget):
 
     # 连接控制面板信号
     def connect_control_signals(self):
-        self.control_panel.start_simulation.connect(self.pybullet_process.env.start_simulation)
-        self.control_panel.stop_simulation.connect(self.pybullet_process.env.stop_simulation)
-        self.control_panel.reset_simulation.connect(self.pybullet_process.env.clear_env)
-        self.control_panel.reset_simulation.connect(self.pybullet_process.env.load_scene)
+        self.control_panel.start_simulation.connect(self.on_control_panel_start_simulation)
+        self.control_panel.stop_simulation.connect(self.on_control_panel_stop_simulation)
+        self.control_panel.reset_simulation.connect(self.on_control_panel_reset_simulation)
+        # self.control_panel.reset_simulation.connect(self.pybullet_process.env.clear_env)
+        # self.control_panel.reset_simulation.connect(self.pybullet_process.env.load_scene)
         # self.control_panel.set_gravity.connect(self.set_gravity)
         # self.control_panel.set_time_step.connect(self.set_time_step)
-        self.control_panel.show_axis_changed.connect(self.pybullet_process.env.show_axis)
+        self.control_panel.show_axis_changed.connect(self.on_show_axis_changed)
+
+    def on_control_panel_start_simulation(self):
+        """处理控制面板的仿真状态变化"""
+        asyncio.run_coroutine_threadsafe(self.pybullet_process.env.start_simulation(),self.env_loop)
+
+    def on_control_panel_stop_simulation(self):
+        """处理控制面板的仿真状态变化"""
+
+        asyncio.run_coroutine_threadsafe(self.pybullet_process.env.stop_simulation(),self.env_loop)
+
+    def on_control_panel_reset_simulation(self):
+        """处理控制面板的仿真状态变化"""
+        asyncio.run_coroutine_threadsafe(self.pybullet_process.env.clear_env(),self.env_loop)
+        asyncio.run_coroutine_threadsafe(self.pybullet_process.env.load_scene(),self.env_loop)
+
+    def on_show_axis_changed(self, ifshow: bool):
+        """处理显示坐标轴状态变化"""
+        # loop = self.pybullet_process.loop  # 获取 PyBulletProcess 的事件循环
+        asyncio.run_coroutine_threadsafe(self.pybullet_process.env.show_axis(ifshow=ifshow), self.env_loop)
+
 
     def find_and_embed_pybullet(self):
         """嵌入PyBullet窗口"""
@@ -378,7 +401,7 @@ class ControlPanel(QWidget):
                 border: none;
                 border-radius: 6px;
                 color: white;  /* 启用时文字白色 */
-                transition: all 0.2s ease;  /*  hover/禁用切换时添加过渡，更流畅 */
+
             }
 
             /* 2. 启用状态 - 功能色区分（原有逻辑保留） */
@@ -398,7 +421,7 @@ class ControlPanel(QWidget):
                 background-color: #e5e7eb;  /* 浅灰色背景（去饱和，无功能色） */
                 color: #6b7280;             /* 深灰色文字（避免白色在浅灰上看不清） */
                 opacity: 1;                 /* 取消透明度，用颜色区分更清晰（可选） */
-                cursor: not-allowed;        /* 鼠标悬停时显示“禁止”图标，进一步提示 */
+
             }
         """
 

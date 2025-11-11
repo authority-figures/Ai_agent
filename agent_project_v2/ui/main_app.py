@@ -8,6 +8,7 @@ import threading
 import multiprocessing
 import time
 import socket
+import asyncio
 
 
 os.environ["QT_IM_MODULE"] = "fcitx"
@@ -153,6 +154,43 @@ def setup_qt_application():
         raise
 
 
+def wait_for_service(host: str, port: int, timeout: float = 30.0) -> bool:
+    """轮询等待某个 TCP 端口开放"""
+    start = time.time()
+    while time.time() - start < timeout:
+        try:
+            with socket.create_connection((host, port), timeout=1.0):
+                logger.info(f"Service at {host}:{port} is up.")
+                return True
+        except OSError:
+            time.sleep(0.5)
+    logger.error(f"Service at {host}:{port} did NOT start within {timeout} seconds.")
+    return False
+
+def check_fastapi_ready():
+    """
+    检查FastAPI服务是否已启动
+    """
+    retries = 10
+    while retries > 0:
+        try:
+            # 尝试连接到FastAPI服务
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                result = s.connect_ex(('127.0.0.1', 8001))  # 默认端口
+                if result == 0:
+                    logger.info("FastAPI server is ready.")
+                    return True
+        except Exception as e:
+            logger.error(f"Failed to connect to FastAPI: {e}")
+
+        retries -= 1
+        time.sleep(1)
+
+    logger.error("FastAPI service did not start within the timeout.")
+    return False
+
+
+
 def create_main_window(app):
     """
     创建并返回主窗口实例
@@ -201,6 +239,20 @@ def main():
         # # 2. 初始化服务
         # if not initialize_services():
         #     logger.error("Service initialization failed. Exiting...")
+        #     return 1
+        # 2. 检查FastAPI服务是否启动
+
+        # 等待 FastAPI 服务启动
+        if not wait_for_service("127.0.0.1", 8000):
+            logger.error("FastAPI failed to start.")
+            return 1
+
+        if not wait_for_service("127.0.0.1", 8001, timeout=40.0):
+            logger.error("PyBullet service failed to start. Exiting application.")
+            return 1
+
+        # if not check_fastapi_ready():
+        #     logger.error("FastAPI failed to start. Exiting application.")
         #     return 1
 
         # 3. 设置Qt应用

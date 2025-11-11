@@ -12,6 +12,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from core.service_locator import ServiceLocator
 import asyncio
 
+# pybullet相关-----------------------------------
+import multiprocessing as mp
+from api.routers.pybullet_info import run_pybullet_service
 
 
 
@@ -31,7 +34,8 @@ app.add_middleware(
 app.include_router(graph_router)   # 注册图结构相关的路由
 app.include_router(task_router)    # 注册任务相关的路由
 
-
+# 定义全局变量来存储PyBullet仿真进程
+pybullet_proc = None
 
 # 可选：根路径的简单响应
 @app.get("/")
@@ -89,9 +93,22 @@ async def startup_event():
     await plan_info.startup_event()
     await executor_info.startup_event()
 
+    # 启动PyBullet仿真进程
+    pybullet_proc = mp.Process(target=run_pybullet_service)
+    pybullet_proc.start()
+    print("[Fast api:main] PyBullet simulation started.")
+
 @app.on_event("shutdown")
 async def shutdown_event():
     await plan_info.shutdown_event()
     await executor_info.shutdown_event()
+
+    # 停止PyBullet仿真进程
+    print("Shutting down PyBullet simulation.")
+    # 如果使用多进程管理PyBullet，确保在这里终止PyBullet进程
+    # 这里可以通过共享的信号或 IPC 机制来停止 PyBullet 进程
+    pybullet_proc.terminate()
+    print("PyBullet simulation stopped.")
+
 
 
