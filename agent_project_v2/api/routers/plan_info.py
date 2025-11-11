@@ -34,17 +34,29 @@ async def plan_agent_listener(agent_service: AgentService):
             async for msg in pubsub.listen():
                 if msg["type"] == "message":
                     task_id = msg["data"]
-                    print(f"[PlanAgent] Received new task: {task_id}")
+
+                    # 检查该任务是否已经被处理
+                    task_processed = await redis_client.get(f"task_processed:{task_id}")
+                    if task_processed:
+                        # 如果任务已经处理过，跳过该任务
+                        print(f"[PlanAgent] Task {task_id} already processed, skipping.")
+                        continue
+
+                    print(f"[plan_info:plan_agent_listener:PlanAgent] Received new task: {task_id}")
                     asyncio.create_task(agent_service.compiled_graph.ainvoke({
                         "input": "null",
                         "task_id": str(task_id),
                         "input_type": "run_task",
                          },config=session1_config))
+
+                    # 将任务标记为已处理，避免重复触发
+                    await redis_client.set(f"task_processed:{task_id}", "true", ex=86400)  # 设置 1 天的过期时间
+
         except (asyncio.CancelledError, GeneratorExit):
-            print("[PlanAgent] Listener cancelled, exiting gracefully...")
+            print("[plan_info:plan_agent_listener:PlanAgent] Listener cancelled, exiting gracefully...")
             break
         except Exception as e:
-            print(f"[PlanAgent] Error: {e}, retrying in 3 seconds...")
+            print(f"[plan_info:plan_agent_listener:PlanAgent] Error: {e}, retrying in 3 seconds...")
             await asyncio.sleep(3)
 
 

@@ -10,7 +10,7 @@ from agent.tools.plan_graph_tools import using_tools
 
 llm = chatGPT_llm(model_name="gpt-4o-mini",temperature=0)
 llm_with_tools = llm.bind_tools(using_tools)
-system_prompt = "你是一个AI助理,负责依据传入的任务来制定执行计划\n"
+system_prompt = "你是一个AI助理,负责依据传入的任务来制定执行计划,例如，当任务为移动机械臂到目标点（1，1，1），姿态为（0，0，0，1）。则应该分为1.获取机械臂当前位置；2.使用规划工具规划出当前点到目标点的路径点；3.执行该路径\n"
 
 class AgentNode:
     def __init__(self,config):
