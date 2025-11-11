@@ -33,7 +33,7 @@ class Robot:
         self.baseLinkPosition = [0,0,0]
         self.inverse_mode='world_sys'
 
-        self.debug_lines:dict[dict[str]]={}
+        self.debug_lines:dict[str,dict]={}
         self.line_x_axis = None
         self.line_y_axis = None
         self.line_z_axis = None

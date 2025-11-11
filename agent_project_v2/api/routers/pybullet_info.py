@@ -133,6 +133,30 @@ async def get_object_pos_and_ori(request: GetIDRequest):
     return {"status": "success", "pos": pos, "ori": ori}
 
 
+@app.post("/show_tcp_axis")
+async def show_tcp_axis(request: dict):
+    """ API: 向仿真环境添加物体 """
+    try:
+        ifshow = request.get("ifshow", True)
+        if sim_env.robot_list.__len__() ==0:
+            return {"status": "error", "message": "No robot loaded"}
+        if ifshow:
+            sim_env.robot_list[0].show_link_sys(linkIndex=5,lifetime=-1,type=1,name="tcp")
+        else:
+            if not sim_env.robot_list[0].debug_lines.get("tcp"):
+                sim_env.robot_list[0].debug_lines["tcp"] = {}
+        # sim_env.show_axis(ifshow=ifshow)
+        return {"status": "success"}
+    except Exception as e:
+        print("[execution:simulation:api:show_axis] Error showing axis:", e)
+        return {"status": "error", "message": str(e)}
+
+
+
+
+
+
+
 def start_api_server():
     """ 启动 API 服务器 """
     import uvicorn

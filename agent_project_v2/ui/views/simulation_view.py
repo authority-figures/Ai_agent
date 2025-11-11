@@ -12,7 +12,7 @@ import subprocess
 from execution.simulation.simulation_process import PyBulletProcess
 from PyQt5.QtWidgets import QWidget, QHBoxLayout, QPushButton, QLabel, QSpinBox, QDoubleSpinBox, QComboBox
 from PyQt5.QtCore import Qt, pyqtSignal
-
+from ui.widgets.pybullet_tool_panel_widget import ToolPanel
 
 
 
@@ -245,13 +245,20 @@ class SimulationView(QWidget):
                         padding: 8px 12px;
                     }
                 """)
-        main_layout.addWidget(self.label)
+        # main_layout.addWidget(self.label) # 没必要显示该状态栏
 
         # ==============================================
         # 5. 控制面板：保持功能，优化与边界框的适配
         # ==============================================
         self.control_panel = ControlPanel()
         main_layout.addWidget(self.control_panel)
+        # ==============================================
+        # 5.1 tool面板：保持功能，优化与边界框的适配
+        # ==============================================
+        self.tool_panel = ToolPanel(simulation_view=self)
+        self.tool_panel.setMaximumHeight(200)
+        main_layout.addWidget(self.tool_panel)
+
 
         # ==============================================
         # 6. PyBullet容器：弱化内部边框，突出全局边界

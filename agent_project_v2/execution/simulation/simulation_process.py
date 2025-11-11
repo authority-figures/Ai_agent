@@ -122,3 +122,11 @@ class CustomSimulationEnv:
             response = await client.post(f"{self.base_url}/get_robot_end_pos_and_ori", json=data)
             return response.json()
 
+
+    async def show_tcp_axis(self, ifshow):
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{self.base_url}/show_tcp_axis", json={"ifshow": ifshow})
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"status": "error", "message": "Failed to show axis"}
