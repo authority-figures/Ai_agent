@@ -94,17 +94,17 @@ async def load_robot(request: LoadObjectRequest):
     return {"status": "success", "robot_id": robot_id}
 
 
-@app.post("/get_robot_end_pos_and_ori")
-async def get_robot_end_pos_and_ori(request: GetIDRequest):
-    """ API: 获取机械臂末端位置 """
-    pos,ori = sim_env.get_robot_end_pos_and_ori(request.robot_id)
-    return {"status": "success", "end_pos": pos, "end_ori": ori}
+
 
 @app.post("/get_object_pos_and_ori")
 async def get_object_pos_and_ori(request: GetIDRequest):
     """ API: 获取机械臂末端位置 """
-    pos,ori = sim_env.get_object_pos_and_ori(request.robot_id)
-    return {"status": "success", "end_pos": pos, "end_ori": ori}
+    try:
+        pos,ori = sim_env.get_object_pos_and_ori(request.robot_id)
+        return {"status": "success", "end_pos": pos, "end_ori": ori}
+    except Exception as e:
+        print("[execution:simulation:api:get_object_pos_and_ori] Error getting object pos and ori:", e)
+        return {"status": "error", "message": str(e)}
 
 
 
@@ -164,6 +164,32 @@ async def show_tcp_axis(request: dict):
         print("[execution:simulation:api:show_axis] Error showing axis:", e)
         return {"status": "error", "message": str(e)}
 
+@app.post("/get_robot_end_pos_and_ori")
+async def get_robot_end_pos_and_ori(request: GetPosOriRequest):
+    """ API: 获取机械臂末端位置 """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        if request.reference_frame == "body":
+            pos, ori = sim_env.robot_list[0].get_pos_ori_from_ik(tcp_name=None)
+        elif request.reference_frame == "world":
+            pos, ori = sim_env.robot_list[0].show_link_sys(5,0.1,1)
+            # pos, ori = sim_env.get_robot_end_pos_and_ori(sim_env.robot_list[0].id_robot)
+        elif request.reference_frame == "CNC_C":
+            pos, ori = sim_env.robot_list[0].get_position_relative_to_link(
+                bodyA_id=sim_env.robot_list[0].id_robot,
+                bodyB_id=sim_env.machine.id_robot,
+                linkA_id=5,
+                linkB_id=sim_env.machine.turntable_index,
+            )
+        else:
+            return {"status": "error", "message": "No reference frame matched"}
+
+        data = {"pos": tuple(pos), "ori": tuple(ori)}
+        return {"status": "success", "message": data}
+    except Exception as e:
+        print("[execution:simulation:api:get_robot_end_pos_and_ori] Error getting robot end pos and ori:", e)
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/get_tcp_pos_and_ori")
@@ -195,14 +221,18 @@ async def get_tcp_pos_and_ori(request: GetPosOriRequest):
 
 
 
+
+
 def start_api_server():
     """ 启动 API 服务器 """
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8001)
 
 # ===============================================================================
-from fastapi import WebSocket, WebSocketDisconnect
 # 机械臂状态发布频道
+# ===============================================================================
+from fastapi import WebSocket, WebSocketDisconnect
+
 class RobotStateManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []

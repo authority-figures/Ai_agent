@@ -107,7 +107,19 @@ class CustomSimulationEnv:
                 if response.status_code == 200:
                     return response.json()
                 else:
-                    return {"status": "error", "message": "Failed to show axis"}
+                    return {"status": "error", "message": "Failed to get_tcp_pos_and_ori"}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
+    async def get_robot_end_effector_pos_and_ori(self, ):
+        async with httpx.AsyncClient() as client:
+            try:
+                request = GetPosOriRequest(object_id=None, reference_frame=self.reference_frame)
+                response = await client.post(f"{self.base_url}/get_robot_end_pos_and_ori", json=request.to_dict())
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to get_robot_end_effector_pos_and_ori"}
             except Exception as e:
                 return {"status": "error", "message": str(e)}
 

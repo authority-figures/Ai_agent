@@ -153,6 +153,7 @@ class ArmToolPage(QWidget):
     """机械臂工具页面"""
     show_tcp_axis_changed = pyqtSignal(bool)
     tcp_pos_and_ori = pyqtSignal(dict, dict)
+    end_effector_pos_and_ori = pyqtSignal(dict, dict)
     subscribe_changed = pyqtSignal(bool)
     def __init__(self, parent=None, simulation_view=None):
         super().__init__(parent)
@@ -275,7 +276,7 @@ class ArmToolPage(QWidget):
     def create_button_connection(self):
         self.reference_frame_combo.currentIndexChanged.connect(self.on_reference_frame_changed)
         self.get_tcp_btn.clicked.connect(self.on_get_tcp_btn_clicked)
-        self.get_end_effector_btn.clicked.connect(self.get_end_effector_coordinates)
+        self.get_end_effector_btn.clicked.connect(self.on_get_robot_end_effector_btn_clicked)
         self.show_tcp_axis_btn.clicked.connect(self.on_show_tcp_axis_btn_clicked)
         self.subscribe_btn.clicked.connect(self.on_subscribe_btn_clicked)
 
@@ -285,6 +286,7 @@ class ArmToolPage(QWidget):
     def create_signal_connection(self):
         self.show_tcp_axis_changed.connect(self.on_show_axis_changed)
         self.tcp_pos_and_ori.connect(self.update_coord_display)
+        self.end_effector_pos_and_ori.connect(self.update_coord_display)
         self.subscribe_changed.connect(self.on_subscribe_changed)
         self.websocket_client.joint_states_signal.connect(self.update_joint_angles_display)
 
@@ -379,11 +381,6 @@ class ArmToolPage(QWidget):
         quaternion = {"qx": 0.12, "qy": 0.34, "qz": 0.56, "qw": 0.78}
         self.update_coord_display(tcp_coordinates, quaternion)
 
-    def get_end_effector_coordinates(self):
-        """获取机械臂末端关节坐标的按钮事件"""
-        end_effector_coordinates = {"x": 2.34, "y": 5.67, "z": 8.90}
-        quaternion = {"qx": 0.23, "qy": 0.45, "qz": 0.67, "qw": 0.89}
-        self.update_coord_display(end_effector_coordinates, quaternion)
 
     def update_coord_display(self, coordinates, quaternion):
         """更新坐标和四元数的显示"""
@@ -421,6 +418,7 @@ class ArmToolPage(QWidget):
                                          self.simulation_view.env_loop)
 
         pass
+
     async def get_tcp_pos_and_ori(self):
         data = await self.simulation_view.pybullet_process.env.get_tcp_pos_and_ori()
         status = data.get("status",None)
@@ -434,6 +432,28 @@ class ArmToolPage(QWidget):
                 print("[ArmToolPage:get_tcp_pos_and_ori]获取TCP坐标失败:", data.get("message","Unknown error"))
         except Exception as e:
             print("[ArmToolPage:get_tcp_pos_and_ori]获取TCP坐标异常:", str(e))
+
+    def on_get_robot_end_effector_btn_clicked(self):
+        """获取机械臂末端坐标的按钮事件"""
+        asyncio.run_coroutine_threadsafe(self.get_robot_end_effector_pos_and_ori(),
+                                         self.simulation_view.env_loop)
+        pass
+
+    async def get_robot_end_effector_pos_and_ori(self):
+        data = await self.simulation_view.pybullet_process.env.get_robot_end_effector_pos_and_ori()
+        status = data.get("status", None)
+        try:
+            if status is not None and status == "success":
+                pos, ori = data["message"]["pos"], data["message"]["ori"]
+                coordinates = {"x": pos[0], "y": pos[1], "z": pos[2]}
+                quaternion = {"qx": ori[0], "qy": ori[1], "qz": ori[2], "qw": ori[3]}
+                self.end_effector_pos_and_ori.emit(coordinates, quaternion)
+            else:
+                print("[ArmToolPage:get_tcp_pos_and_ori]获取TCP坐标失败:", data.get("message", "Unknown error"))
+        except Exception as e:
+            print("[ArmToolPage:get_tcp_pos_and_ori]获取TCP坐标异常:", str(e))
+        pass
+
 
     def on_subscribe_btn_clicked(self):
         if self.subscribe_btn.text() == "订阅机械臂状态":

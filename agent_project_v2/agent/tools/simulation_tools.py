@@ -3,24 +3,33 @@ import requests
 import httpx
 from core.task import *
 from typing import Dict,Union
-
+import httpx
+from core.simulation_request import *
 
 @tool
-def get_robot_end_pos_and_ori(description,robot_id):
+async def get_robot_end_pos_and_ori(description,robot_id,reference_frame="world"):
     """
     获取机械臂末端位置。
 
     参数:
     - description (str): 对任务的详细复述,包含输入的参数
     - robot_id (int): 机械臂的 ID
+    - reference_frame (str): 参考系，默认 "world" "world"|"body"|"CNC_C"
 
     返回:
-    - dict: API 响应数据，包含 `status`、`end_pos` 和 `end_ori`
+    - dict: API 响应数据，包含 "status"、"messages":`end_pos` 和 `end_ori`
     """
-
+    url = f"http://localhost:8001/get_robot_end_pos_and_ori"
     try:
-        result = {"end_pos": [0.5, 0.3, 0.2], "end_ori": [0, 0, 0, 1]}
-        return {"status": "success", "message": result}
+        request = GetPosOriRequest(object_id=None, reference_frame=reference_frame)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url,json=request.to_dict())
+            if response.status_code == 200:
+                data = response.json()
+                return data
+            else:
+                print(f"[simulation_tools:get_robot_end_pos_and_ori] HTTP Error: {response.status_code}, {response.text}")
+
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
