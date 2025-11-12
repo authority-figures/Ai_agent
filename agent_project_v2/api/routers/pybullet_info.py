@@ -2,7 +2,7 @@
 import asyncio
 
 import uvicorn
-
+import numpy as np
 import threading
 import time
 
@@ -109,18 +109,47 @@ async def get_object_pos_and_ori(request: GetIDRequest):
 
 
 @app.post("/move_robot_to_target")
-async def move_robot_to_target(request: TargetMoveRequest):
+async def move_robot_to_target(request: PosMoveRequest):
     """ API: 让机械臂运动 """
-    response = sim_env.move_robot_to_target(request.robot_id,request.target_position,request.target_orientation,request.maxVelocity)
-    if response == "No robot loaded":
-        return {"status": "error", "message": response}
-    elif response == "IK failed":
-        return {"status": "error", "message": response}
-    elif response == "Robot moved failed":
-        return {"status": "error", "message": response}
-    else:
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        robot_id = sim_env.robot_list[0].id_robot
 
-        return {"status": "success", "message": response}
+        if request.reference_frame == "body":
+            pre_inverse_mode = sim_env.robot_list[0].inverse_mode
+            sim_env.robot_list[0].inverse_mode = "body_sys"
+            joints_value = sim_env.robot_list[0].get_state_from_ik(request.target_position,request.target_orientation,tcp_name=None)
+            sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
+            sim_env.robot_list[0].inverse_mode = pre_inverse_mode
+        elif request.reference_frame == "world":
+            # response = sim_env.move_robot_to_target(robot_id,request.target_position,request.target_orientation,request.maxVelocity)
+            pre_inverse_mode = sim_env.robot_list[0].inverse_mode
+            sim_env.robot_list[0].inverse_mode = "world_sys"
+            joints_value = sim_env.robot_list[0].get_state_from_ik(request.target_position, request.target_orientation,
+                                                                   tcp_name=None)
+            sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
+            sim_env.robot_list[0].inverse_mode = pre_inverse_mode
+        elif request.reference_frame == "CNC_C":
+            T_world2robot = sim_env.rm_sys.T_robot2world.copy()
+            T_c2world = sim_env.robot_list[0].pos_to_matrix([0,0,-sim_env.machine.C_in_sys0],[0,0,0,1])
+            T_c2target = sim_env.robot_list[0].pos_to_matrix(request.target_position,request.target_orientation)
+            T_robot2target = np.linalg.inv(T_world2robot) @ np.linalg.inv(T_c2world) @ T_c2target
+            pos, ori = sim_env.robot_list[0].matrix_to_pos(T_robot2target)
+            pre_inverse_mode = sim_env.robot_list[0].inverse_mode
+            sim_env.robot_list[0].inverse_mode = "body_sys"
+            joints_value = sim_env.robot_list[0].get_state_from_ik(pos, ori,
+                                                                   tcp_name=None)
+            sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
+            sim_env.robot_list[0].inverse_mode = pre_inverse_mode
+        else:
+            return {"status": "error", "message": "No reference frame matched"}
+
+        return {"status": "success", "message": "Robot moved to target"}
+
+    except Exception as e:
+        print("[execution:simulation:api:move_robot_to_target] Error moving robot to target:", e)
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/create_cube")

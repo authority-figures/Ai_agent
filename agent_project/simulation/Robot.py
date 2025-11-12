@@ -780,6 +780,40 @@ class Robot:
             )
         return "Robot moved successfully"
 
+    def joint_move_once(self,joint_positions,force=10000,maxVelocity=1,timeout=10):
+        """ 控制机械臂的关节 执行到位后停止 """
+        if self.id_robot is None:
+            return "No robot loaded"
+
+
+        for i in range(min(len(joint_positions), self.num_avail_joints)):
+            p.setJointMotorControl2(
+                self.id_robot, self.ids_avail_joints[i],
+                p.POSITION_CONTROL, targetPosition=joint_positions[i],force=force,
+                targetVelocity=0, maxVelocity=maxVelocity,
+                positionGain=0.5, velocityGain=0.5,
+            )
+
+        if timeout>=0:
+            if timeout==0:
+                timeout = float('inf')
+            while not self.has_reached_target(joint_positions, 1e-3):
+                if timeout < 0:
+                    break
+                # p.stepSimulation()
+                time.sleep(1/240.)
+                timeout -= 1/240.
+
+            # 清楚位置控制
+            for i in range(min(len(joint_positions), self.num_avail_joints)):
+                p.setJointMotorControl2(
+                    self.id_robot, self.ids_avail_joints[i],
+                    p.VELOCITY_CONTROL,
+                    targetVelocity=0,
+                )
+
+        return "Robot moved successfully"
+
 
     def update(self, mode=0):
         if mode == 0:

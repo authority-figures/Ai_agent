@@ -123,6 +123,25 @@ class CustomSimulationEnv:
             except Exception as e:
                 return {"status": "error", "message": str(e)}
 
+    async def set_robot_tcp_pos_and_ori(self, target_position, target_orientation, maxVelocity=1):
+        try:
+            request = {
+                "robot_id": None,
+                "target_position": target_position,
+                "target_orientation": target_orientation,
+                "reference_frame": self.reference_frame,
+                "maxVelocity": maxVelocity
+            }
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/move_robot_to_target", json=request,timeout=10)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to set_robot_tcp_pos_and_ori"}
+        except Exception as e:
+            print(f"[CustomSimulationEnv:set_robot_tcp_pos_and_ori] Exception: {e}")
+            return {"status": "error", "message": str(e)}
+
     async def add_object(self, urdf_path, basePosition, baseOrientation, useFixedBase):
         data = {
             "urdf_path": urdf_path,

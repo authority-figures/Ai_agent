@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ''))
 from Robot import Robot
 from Machine import Machine
 from RM_sys import RM_sys
-from agent_project.simulation import pb_ompl,taskspaceRRT
+from execution.simulation import pb_ompl,taskspaceRRT
 
 from calibrator import *
 PI = np.pi

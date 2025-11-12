@@ -1,13 +1,14 @@
 import json
 
-from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread
+from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread, QTimer
 
 
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QLabel,
-                             QLineEdit, QSizePolicy, QGroupBox, QLayout
+                             QLineEdit, QSizePolicy, QGroupBox, QLayout, QApplication
                              )
 import asyncio
 import websockets
+import re
 
 colors = {
     "light_gray": "#f0f0f0",
@@ -280,6 +281,13 @@ class ArmToolPage(QWidget):
         self.show_tcp_axis_btn.clicked.connect(self.on_show_tcp_axis_btn_clicked)
         self.subscribe_btn.clicked.connect(self.on_subscribe_btn_clicked)
 
+        # copy button
+        self.GUI_copy_pos_btn.clicked.connect(self.copy_data)
+        self.GUI_copy_ori_btn.clicked.connect(self.copy_data)
+        self.GUI_copy_joints_angle_btn.clicked.connect(self.copy_data)
+        self.GUI_set_pos_btn.clicked.connect(self.on_set_robot_data)
+        self.GUI_set_ori_btn.clicked.connect(self.on_set_robot_data)
+        # self.GUI_set_joints_angle_btn.clicked.connect(self.on_set_robot_data)
 
         pass
 
@@ -466,6 +474,59 @@ class ArmToolPage(QWidget):
     def on_subscribe_changed(self,on_subscribe):
         asyncio.run_coroutine_threadsafe(self.simulation_view.pybullet_process.env.subscribe_robot_state(on_subscribe),
                                          self.simulation_view.env_loop)
+
+    def copy_data(self):
+        self.current_button = self.sender()  # 获取触发信号的按钮
+
+        try:
+            """复制位置数据到剪贴板"""
+            data = self.current_button.line_edit.text()  # 通过按钮访问 QLineEdit
+            QApplication.clipboard().setText(data)
+            # # 显示对钩图标来表示复制成功
+            # icon_size = self.GUI_copy_pos_btn.sizeHint()
+            # self.GUI_copy_pos_btn.setIcon(QIcon(QPixmap('resources/images/green.png').scaled(icon_size, transformMode=Qt.SmoothTransformation)))
+            # self.GUI_copy_pos_btn.setLayoutDirection(Qt.RightToLeft)
+            # self.GUI_copy_pos_btn.setIconSize(icon_size)
+            self.current_button.setText('Copy √!')
+            # 设置定时器清除图标
+            QTimer.singleShot(500, self.clear_icon)  # 2秒后清除图标
+            # QMessageBox.information(self, "Copied", "Position data copied to clipboard!")
+        except Exception as e:
+            print(f"Error copy pos data: {str(e)}")
+
+    def clear_icon(self):
+        try:
+            # 清除按钮的图标
+            # self.GUI_copy_pos_btn.setIcon(QIcon())
+            self.current_button.setText('Copy')
+        except Exception as e:
+            print(f"Error clear icon: {str(e)}")
+
+    @staticmethod
+    def extract_floats_from_text(data_str: str):
+        # 使用正则表达式提取所有浮点数
+        pattern = r"[-+]?\d*\.\d+|\d+"  # 匹配浮动点数
+        float_values = re.findall(pattern, data_str)
+
+        # 将字符串列表转换为浮动点数列表
+        return [float(value) for value in float_values]
+
+    def on_set_robot_data(self):
+        button = self.sender()  # 获取触发信号的按钮
+        button_name = button.objectName()  # 获取按钮对象的
+
+        try:
+            pos_data = self.GUI_set_pos_btn.line_edit.text()
+            ori_data = self.GUI_set_ori_btn.line_edit.text()
+            pos_data = self.extract_floats_from_text(pos_data)
+            ori_data = self.extract_floats_from_text(ori_data)
+            if pos_data and ori_data:
+                asyncio.run_coroutine_threadsafe(
+                    self.simulation_view.pybullet_process.env.set_robot_tcp_pos_and_ori(pos_data, ori_data,maxVelocity=0.5),
+                    self.simulation_view.env_loop)
+        except Exception as e:
+            print(f"[ArmToolPage:on_set_robot_data] Error set robot data: {str(e)}")
+
 
 
 class MachineToolPage(QWidget):
