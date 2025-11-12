@@ -1,10 +1,13 @@
-from PyQt5.QtCore import pyqtSignal, Qt, QEvent
+import json
+
+from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread
 
 
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QLabel,
                              QLineEdit, QSizePolicy, QGroupBox, QLayout
                              )
 import asyncio
+import websockets
 
 colors = {
     "light_gray": "#f0f0f0",
@@ -44,7 +47,42 @@ colors = {
     "light_olive": "#808000"
 }
 
+# WebSocket 客户端
+class WebSocketClient(QThread):
+    joint_states_signal = pyqtSignal(list)
 
+    def __init__(self,loop=None):
+        super().__init__()
+        self.loop = loop or asyncio.new_event_loop()
+    async def listen(self):
+        uri = "ws://127.0.0.1:8001/ws/robotstate"
+        async with websockets.connect(uri) as websocket:
+            print("[WebSocketClient] Connected to WebSocket:", uri)
+            while True:
+                message = await websocket.recv()  # 接收消息
+                data = json.loads(message)  # 假设消息是 JSON 格式
+                joints = data.get("jointstates",None)
+                if joints:
+                    self.joint_states_signal.emit(joints)
+
+    def run(self):
+        """ Runs the event loop in a separate thread """
+        try:
+            # # Check if the current thread has an event loop
+            # if not asyncio.get_event_loop().is_running():
+            #     loop = asyncio.new_event_loop()
+            #     asyncio.set_event_loop(loop)  # Set a new event loop for this thread
+            #
+            # # Now you can safely call asyncio.get_event_loop() in this thread
+            # loop = asyncio.get_event_loop()
+            # print("[WebSocketClient] Event loop started in thread:", QThread.currentThread())
+            # # Your asyncio code
+            # self.loop.run_until_complete(self.listen())  # Assuming 'listen' is an async function
+            loop = asyncio.new_event_loop()  # 为当前线程创建一个新的事件循环
+            asyncio.set_event_loop(loop)  # 设置该线程的事件循环
+            loop.run_until_complete(self.listen())  # 运行 `listen` 方法
+        except Exception as e:
+            print(f"Error in event loop setup: {e}")
 
 class LineEdit(QLineEdit):
     def __init__(self, parent=None,type='output'):
@@ -114,6 +152,8 @@ class LineEdit(QLineEdit):
 class ArmToolPage(QWidget):
     """机械臂工具页面"""
     show_tcp_axis_changed = pyqtSignal(bool)
+    tcp_pos_and_ori = pyqtSignal(dict, dict)
+    subscribe_changed = pyqtSignal(bool)
     def __init__(self, parent=None, simulation_view=None):
         super().__init__(parent)
         self.simulation_view = simulation_view
@@ -125,6 +165,7 @@ class ArmToolPage(QWidget):
         self.get_tcp_btn = QPushButton("获取机械臂TCP坐标")
         self.get_end_effector_btn = QPushButton("获取机械臂末端关节坐标")
         self.show_tcp_axis_btn = QPushButton("显示TCP坐标轴")
+        self.subscribe_btn = QPushButton("订阅机械臂状态")
 
 
         # 坐标信息显示窗口
@@ -189,6 +230,7 @@ class ArmToolPage(QWidget):
         button_layout.addWidget(self.get_tcp_btn)
         button_layout.addWidget(self.get_end_effector_btn)
         button_layout.addWidget(self.show_tcp_axis_btn)
+        button_layout.addWidget(self.subscribe_btn)
         layout.addLayout(button_layout)
         layout.addWidget(self.coord_display_widget)
 
@@ -219,16 +261,46 @@ class ArmToolPage(QWidget):
                     }
                 """)
 
+        # 创建 WebSocket 客户端实例
+        self.websocket_client = WebSocketClient(loop=self.simulation_view.pybullet_process.loop)
+        # 启动 WebSocket 客户端 用于监听来自仿真环境的机械臂关节状态更新
+        self.websocket_client.start()
+
 
         self.create_button_connection()
+        self.create_signal_connection()
+
+
 
     def create_button_connection(self):
-        self.get_tcp_btn.clicked.connect(self.get_tcp_coordinates)
+        self.reference_frame_combo.currentIndexChanged.connect(self.on_reference_frame_changed)
+        self.get_tcp_btn.clicked.connect(self.on_get_tcp_btn_clicked)
         self.get_end_effector_btn.clicked.connect(self.get_end_effector_coordinates)
         self.show_tcp_axis_btn.clicked.connect(self.on_show_tcp_axis_btn_clicked)
-        self.show_tcp_axis_changed.connect(self.on_show_axis_changed)
+        self.subscribe_btn.clicked.connect(self.on_subscribe_btn_clicked)
+
 
         pass
+
+    def create_signal_connection(self):
+        self.show_tcp_axis_changed.connect(self.on_show_axis_changed)
+        self.tcp_pos_and_ori.connect(self.update_coord_display)
+        self.subscribe_changed.connect(self.on_subscribe_changed)
+        self.websocket_client.joint_states_signal.connect(self.update_joint_angles_display)
+
+    def on_reference_frame_changed(self, index):
+        """参考系选择变化时更新self.simulation_view.pybullet_process.env.reference_frame"""
+
+        # 获取选中的项
+        selected_item = self.reference_frame_combo.currentText()
+
+        # 根据选中的项设置 reference_frame
+        if selected_item == "机械臂基座坐标系":
+            self.simulation_view.pybullet_process.env.reference_frame = "body"
+        elif selected_item == "世界坐标系":
+            self.simulation_view.pybullet_process.env.reference_frame = "world"
+        elif selected_item == "机床转台中心坐标系":
+            self.simulation_view.pybullet_process.env.reference_frame = "CNC_C"
 
     def create_GUI_robot_info(self):
         # 创建显示数据的组
@@ -323,6 +395,11 @@ class ArmToolPage(QWidget):
         self.GUI_ori_data.setText(quaternion_text)
         self.GUI_joints_angle_data.setText("Joint angles display here")
 
+    def update_joint_angles_display(self, joint_angles):
+        """更新关节角度的显示"""
+        joint_angles_text = ", ".join([f"{angle:.2f}" for angle in joint_angles])
+        self.GUI_joints_angle_data.setText(joint_angles_text)
+
 
     def on_show_tcp_axis_btn_clicked(self):
         """显示TCP坐标系轴的按钮事件"""
@@ -337,6 +414,38 @@ class ArmToolPage(QWidget):
     def on_show_axis_changed(self, ifshow:bool):
         """处理显示TCP坐标轴状态变化的槽函数"""
         asyncio.run_coroutine_threadsafe(self.simulation_view.pybullet_process.env.show_tcp_axis(ifshow), self.simulation_view.env_loop)
+
+    def on_get_tcp_btn_clicked(self):
+        """获取机械臂TCP坐标的按钮事件"""
+        asyncio.run_coroutine_threadsafe(self.get_tcp_pos_and_ori(),
+                                         self.simulation_view.env_loop)
+
+        pass
+    async def get_tcp_pos_and_ori(self):
+        data = await self.simulation_view.pybullet_process.env.get_tcp_pos_and_ori()
+        status = data.get("status",None)
+        try:
+            if status is not None and status=="success":
+                pos, ori = data["message"]["pos"], data["message"]["ori"]
+                coordinates = {"x":pos[0],"y":pos[1],"z":pos[2]}
+                quaternion = {"qx":ori[0],"qy":ori[1],"qz":ori[2],"qw":ori[3]}
+                self.tcp_pos_and_ori.emit(coordinates, quaternion)
+            else:
+                print("[ArmToolPage:get_tcp_pos_and_ori]获取TCP坐标失败:", data.get("message","Unknown error"))
+        except Exception as e:
+            print("[ArmToolPage:get_tcp_pos_and_ori]获取TCP坐标异常:", str(e))
+
+    def on_subscribe_btn_clicked(self):
+        if self.subscribe_btn.text() == "订阅机械臂状态":
+            self.subscribe_btn.setText("取消订阅机械臂状态")
+            self.subscribe_changed.emit(True)
+        else:
+            self.subscribe_btn.setText("订阅机械臂状态")
+            self.subscribe_changed.emit(False)
+
+    def on_subscribe_changed(self,on_subscribe):
+        asyncio.run_coroutine_threadsafe(self.simulation_view.pybullet_process.env.subscribe_robot_state(on_subscribe),
+                                         self.simulation_view.env_loop)
 
 
 class MachineToolPage(QWidget):

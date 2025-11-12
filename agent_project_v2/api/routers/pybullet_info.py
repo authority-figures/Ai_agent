@@ -1,4 +1,6 @@
 # run_pybullet_service.py
+import asyncio
+
 import uvicorn
 
 import threading
@@ -9,6 +11,7 @@ from fastapi import FastAPI,Request
 from pydantic import BaseModel
 from execution.simulation.environment import SimulationEnvironment
 from execution.simulation.models import *
+from core.simulation_request import *
 
 # 创建 FastAPI 服务器
 app = FastAPI()
@@ -143,7 +146,7 @@ async def show_tcp_axis(request: dict):
 
         # 定义回调函数
         def show_tcp():
-            sim_env.robot_list[0].show_link_sys(linkIndex=5, lifetime=-1, type=1, name="tcp")
+            sim_env.robot_list[0].show_link_sys(linkIndex=10, lifetime=-1, type=1, name="tcp")
 
         # 唯一标识符
         callback_id = "show_tcp"
@@ -163,6 +166,31 @@ async def show_tcp_axis(request: dict):
 
 
 
+@app.post("/get_tcp_pos_and_ori")
+async def get_tcp_pos_and_ori(request: GetPosOriRequest):
+    """ API: 获取机械臂末端位置 """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        if request.reference_frame == "body":
+            pos, ori = sim_env.robot_list[0].get_pos_ori_from_ik(tcp_name="rolling_tool")
+        elif request.reference_frame == "world":
+            pos, ori = sim_env.robot_list[0].show_link_sys(10,1,1)
+        elif request.reference_frame == "CNC_C":
+            pos, ori = sim_env.robot_list[0].get_position_relative_to_link(
+                bodyA_id=sim_env.robot_list[0].id_robot,
+                bodyB_id=sim_env.machine.id_robot,
+                linkA_id=10,
+                linkB_id=sim_env.machine.turntable_index,
+            )
+        else:
+            return {"status": "error", "message": "No reference frame matched"}
+        data = {"pos": tuple(pos), "ori": tuple(ori)}
+        return {"status": "success", "message": data}
+    except Exception as e:
+        print("[execution:simulation:api:get_tcp_pos_and_ori] Error getting TCP pos and ori:", e)
+        return {"status": "error", "message": str(e)}
+
 
 
 
@@ -172,6 +200,93 @@ def start_api_server():
     import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8001)
 
+# ===============================================================================
+from fastapi import WebSocket, WebSocketDisconnect
+# 机械臂状态发布频道
+class RobotStateManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        self.active_connections.remove(websocket)
+
+    async def send_robot_state(self, data: dict):
+        """ 向所有连接的客户端发送机械臂状态数据 """
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(data)
+            except WebSocketDisconnect:
+                self.active_connections.remove(connection)
+
+
+robot_state_manager = RobotStateManager()
+
+
+@app.websocket("/ws/robotstate")
+async def websocket_endpoint(websocket: WebSocket):
+    """ WebSocket 路由，用于订阅机械臂状态信息 """
+    await robot_state_manager.connect(websocket)
+    try:
+        while True:
+            # 接收客户端的消息（如果有）
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        robot_state_manager.disconnect(websocket)
+        print("Client disconnected")
+
+
+current_task = None
+@app.post("/publish_robot_state")
+async def publish_robot_state(request: dict):
+    """ 用于发布机械臂的状态信息，推送到所有连接的客户端 """
+    # 假设你从仿真环境获取机械臂的状态信息
+    try:
+        global current_task
+        on_pub = request.get("on_subscribe", True)
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+
+        async def pub_robot_state():
+            while True:
+                try:
+                    await asyncio.sleep(0.1)
+                    joint_states = sim_env.robot_list[0].get_joints_states()
+                    robot_state = {
+                        "status": "success",
+                        "jointstates": joint_states,
+                    }
+                    await robot_state_manager.send_robot_state(robot_state)
+                except asyncio.CancelledError:
+                    # Handle the task cancellation gracefully
+                    print("Publishing robot state task was cancelled.")
+                    break  # Break the loop if the task is cancelled
+
+        # 动态添加或移除回调
+        if on_pub:
+            # 如果任务已经存在，则先取消它
+            if current_task and not current_task.done():
+                current_task.cancel()
+                print("Previous task cancelled.")
+
+            # 创建并启动新任务
+            current_task = asyncio.create_task(pub_robot_state())
+            return {"status": "success", "message": "Robot state publishing started"}
+        else:
+            if current_task and not current_task.done():
+                current_task.cancel()  # 取消任务
+                await current_task  # 确保任务取消后清理
+                return {"status": "success", "message": "Robot state publishing canceled"}
+            else:
+                return {"status": "error", "message": "No active task to cancel"}
+
+
+    except Exception as e:
+        print("[execution:simulation:api:publish_robot_state] Error publishing robot state:", e)
+        return {"status": "error", "message": str(e)}
 
 
 

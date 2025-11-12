@@ -157,6 +157,11 @@ class SimulationView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+
+        # 启动PyBullet仿真
+        self.pybullet_process = PyBulletProcess()
+        self.pybullet_process.start()
+        self.env_loop = self.pybullet_process.loop
         # layout = QVBoxLayout(self)
         # layout.setContentsMargins(0, 0, 0, 0)
         #
@@ -287,10 +292,10 @@ class SimulationView(QWidget):
 
 
 
-        # 启动PyBullet仿真
-        self.pybullet_process = PyBulletProcess()
-        self.pybullet_process.start()
-        self.env_loop = self.pybullet_process.loop
+        # # 启动PyBullet仿真
+        # self.pybullet_process = PyBulletProcess()
+        # self.pybullet_process.start()
+        # self.env_loop = self.pybullet_process.loop
 
         # 初始化嵌入工具
         self.embedder = PyBulletEmbedder(self.container,self.pybullet_process.env_title)

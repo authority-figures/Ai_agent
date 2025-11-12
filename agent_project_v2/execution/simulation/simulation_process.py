@@ -11,6 +11,7 @@ from execution.simulation.environment import SimulationEnvironment
 from PyQt5.QtCore import QThread, QTimer
 import time
 import asyncio
+from core.simulation_request import *
 
 # 为PyBullet窗口设置唯一的名称
 PYBULLET_WINDOW_NAME = "MyPyBulletSimulation_" + str(int(time.time()))
@@ -26,6 +27,7 @@ class PyBulletProcess(QThread):
         # self.env.initialize()
         self.loop = asyncio.new_event_loop()
         self.env_title = PYBULLET_WINDOW_NAME
+
 
     def run(self):
         # self.env.is_running = True
@@ -47,6 +49,7 @@ import httpx
 class CustomSimulationEnv:
     def __init__(self, base_url="http://localhost:8001"):
         self.base_url = base_url
+        self.reference_frame = "body"
 
     async def start_simulation(self):
         async with httpx.AsyncClient() as client:
@@ -96,6 +99,18 @@ class CustomSimulationEnv:
             else:
                 return {"status": "error", "message": "Failed to show axis"}
 
+    async def get_tcp_pos_and_ori(self,):
+        async with httpx.AsyncClient() as client:
+            try:
+                request = GetPosOriRequest(object_id=None, reference_frame=self.reference_frame)
+                response = await client.post(f"{self.base_url}/get_tcp_pos_and_ori", json=request.to_dict())
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to show axis"}
+            except Exception as e:
+                return {"status": "error", "message": str(e)}
+
     async def add_object(self, urdf_path, basePosition, baseOrientation, useFixedBase):
         data = {
             "urdf_path": urdf_path,
@@ -130,3 +145,11 @@ class CustomSimulationEnv:
                 return response.json()
             else:
                 return {"status": "error", "message": "Failed to show axis"}
+
+    async def subscribe_robot_state(self, on_subscribe):
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{self.base_url}/publish_robot_state", json={"on_subscribe": on_subscribe})
+            if response.status_code == 200:
+                return response.json()
+            else:
+                return {"status": "error", "message": "Failed to subscribe_robot_state"}
