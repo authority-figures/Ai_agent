@@ -522,7 +522,7 @@ class ArmToolPage(QWidget):
             ori_data = self.extract_floats_from_text(ori_data)
             if pos_data and ori_data:
                 asyncio.run_coroutine_threadsafe(
-                    self.simulation_view.pybullet_process.env.set_robot_tcp_pos_and_ori(pos_data, ori_data,maxVelocity=0.5),
+                    self.simulation_view.pybullet_process.env.set_robot_end_pos_and_ori(pos_data, ori_data, maxVelocity=0.5),
                     self.simulation_view.env_loop)
         except Exception as e:
             print(f"[ArmToolPage:on_set_robot_data] Error set robot data: {str(e)}")

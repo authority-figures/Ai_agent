@@ -123,7 +123,7 @@ class CustomSimulationEnv:
             except Exception as e:
                 return {"status": "error", "message": str(e)}
 
-    async def set_robot_tcp_pos_and_ori(self, target_position, target_orientation, maxVelocity=1):
+    async def set_robot_end_pos_and_ori(self, target_position, target_orientation, maxVelocity=1):
         try:
             request = {
                 "robot_id": None,
@@ -137,9 +137,9 @@ class CustomSimulationEnv:
                 if response.status_code == 200:
                     return response.json()
                 else:
-                    return {"status": "error", "message": "Failed to set_robot_tcp_pos_and_ori"}
+                    return {"status": "error", "message": "Failed to set_robot_end_pos_and_ori"}
         except Exception as e:
-            print(f"[CustomSimulationEnv:set_robot_tcp_pos_and_ori] Exception: {e}")
+            print(f"[CustomSimulationEnv:set_robot_end_pos_and_ori] Exception: {e}")
             return {"status": "error", "message": str(e)}
 
     async def add_object(self, urdf_path, basePosition, baseOrientation, useFixedBase):
