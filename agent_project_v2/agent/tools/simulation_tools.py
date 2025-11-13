@@ -60,7 +60,7 @@ def plan_A2B(description,robot_id,start_pos,start_ori,end_pos,end_ori):
 
 
 @tool
-async def set_robot_end_pos_and_ori(description, robot_id, pos, ori, reference_frame="world", maxVelocity=1):
+async def set_robot_end_pos_and_ori(description, robot_id, pos, ori, reference_frame, maxVelocity=1):
     '''
     设置机械臂末端位置和姿态。
     参数:
@@ -68,7 +68,7 @@ async def set_robot_end_pos_and_ori(description, robot_id, pos, ori, reference_f
     - robot_id (int): 机械臂的 ID
     - pos (list): 目标位置 [x, y, z]
     - ori (list): 目标姿态 [qx, qy, qz, qw]
-    - reference_frame (str): 参考系，默认 "world" "world"|"body"|"CNC_C"
+    - reference_frame (str): 参考系，默认 "world" "world"|"body"|"CNC_C",分别表示世界坐标系，机械臂基座坐标系，CNC_C轴转台坐标系
     - maxVelocity (float): 最大速度，默认 1
     '''
 

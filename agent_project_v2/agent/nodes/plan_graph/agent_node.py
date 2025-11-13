@@ -18,13 +18,13 @@ class AgentNode:
     def __init__(self,config):
         self.config = config
 
-    def __call__(self, state: OverallState):
+    async def __call__(self, state: OverallState):
         messages = state.get("messages", [])
         action_result = state.get("action_result", [])
         system_message = SystemMessage(content=system_prompt)
         message_history = [system_message] + messages
 
-        llm_output = llm_with_tools.invoke(message_history)
+        llm_output = await llm_with_tools.ainvoke(message_history)
 
 
         messages.append(llm_output)

@@ -13,7 +13,7 @@ from agent.nodes.executor_graph.execute_step_agent_node import AgentNode as exec
 from agent.nodes.executor_graph.write_step_agent_node import AgentNode as write_step_AgentNode
 from agent.nodes.executor_graph.input_node import input_node
 from agent.nodes.executor_graph.tool_node import exec_tool_node,write_tool_node
-from agent.nodes.executor_graph.router import router_executor, router_writter
+from agent.nodes.executor_graph.router import router_executor, router_writter, router_update_node
 from agent.nodes.executor_graph.push_task_node import push_task_node
 
 memory = InMemorySaver()
@@ -37,8 +37,9 @@ graph.add_conditional_edges("execute_step_agent",router_executor,{"execute_tools
 graph.add_edge("exec_tool_node","write_step_agent")
 
 graph.add_edge("write_tool_node","push_task_node")
-graph.add_edge("push_task_node","execute_step_agent")
-graph.add_conditional_edges("write_step_agent",router_writter,{"execute_tools": "write_tool_node","exit": END,})
+
+graph.add_conditional_edges("write_step_agent",router_writter,{"execute_tools": "write_tool_node","exit": "push_task_node",})
+graph.add_conditional_edges("push_task_node",router_update_node,{"continue": "execute_step_agent","exit": END,})
 # graph.add_edge("answer_node",END)
 
 

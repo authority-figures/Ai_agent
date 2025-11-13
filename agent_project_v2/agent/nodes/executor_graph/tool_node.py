@@ -1,11 +1,12 @@
 import json
-
+import time
 from langgraph.prebuilt import ToolNode, ToolInvocation
 from agent.nodes.node_publisher import send_state
 from agent.tools.simulation_tools import using_tools as exec_using_tools
 from agent.tools.exec_graph_tools import using_tools as write_using_tools
 from agent.nodes.executor_graph.state import OverallState
 from core.task import ExecutionStep
+from agent.utils import ColorPrinter
 
 class CustomToolNode:
     def __init__(self, tools, pre_fn=None, post_fn=None):
@@ -14,6 +15,8 @@ class CustomToolNode:
         self.post_fn = post_fn
 
     async def __call__(self, state: OverallState):
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[Executor tool_node] |{time_}|进入tool_node节点")
         if self.pre_fn:
             state = await self.pre_fn(state)
 
@@ -25,7 +28,8 @@ class CustomToolNode:
             print(f"Tool execution error: {e}")
             send_state("tool_execution_node", {"status": "error", "content": str(e)})
             raise e
-
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[Executor tool_node] |{time_}离开tool_node节点")
         if self.post_fn:
             state["messages"] = state.get("messages", []) + tool_message['messages']
             state = await self.post_fn(state)

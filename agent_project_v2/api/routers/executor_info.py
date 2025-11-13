@@ -57,7 +57,7 @@ async def executor_listener(executor_service: AgentService):
             await asyncio.sleep(3)
 
 
-@router.on_event("startup")
+# @router.on_event("startup")
 async def startup_event():
     """
     FastAPI 启动时运行：初始化 Redis 并启动监听任务。

@@ -4,41 +4,57 @@ from agent.llm import chatGPT_llm
 
 from agent.nodes.executor_graph.state import OverallState
 from agent.tools.exec_graph_tools import using_tools
-
-
+import time
+from agent.utils import ColorPrinter
 
 
 llm = chatGPT_llm(model_name="gpt-4o-mini",temperature=0)
 llm_with_tools = llm.bind_tools(using_tools)
-system_prompt = "你是一个AI助理,负责依据task中step的执行情况来填写对应的字段，你可以使用工具来提交修改.每次只填写一个任务，即在所有的step当中的第一个状态为pending的任务\n"
+system_prompt = ("你是一个AI助理,负责依据task中step的执行情况来填写对应的字段，你可以使用工具来提交修改.每次只填写一个任务，即在所有的step当中的第一个状态为pending的任务\n"
+                 "当得知任务执行完毕时（上一个代理回答任务执行完毕或所有的step状态均为finished），你需要回复任务执行完毕,且不要调用工具\n")
 
 class AgentNode:
     def __init__(self,config):
         self.config = config
 
-    def __call__(self, state: OverallState):
+    async def __call__(self, state: OverallState):
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[write_step_agent_node] |{time_}|进入write_step_agent_node节点")
+
+        if state.get("task_finished", False):   # 快速结束
+            time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+            ColorPrinter.debug_normal(f"[write_step_agent_node] |{time_}|离开write_step_agent_node节点 快速结束")
+            return {"messages": state.get("messages", []), "tool_calls": None, "task_finished": True,}
+
         messages = state.get("messages", [])
         task = state.get("task", None)
         if not task:
             print("没有获取到任务，无法执行步骤。")
             return {"messages": messages, "tool_calls": None, }
 
-        prompt = f"请你依据上一个代理执行任务的情况，填写task的execution字段: \n{task}\n。上一个代理的任务执行情况如下：\n{messages[-1]}\n"
+        prompt = f"task的内容如下: \n{task}\n。上一个代理的任务执行情况如下：\n{messages[-1].content}\n"
         input = HumanMessage(content=prompt)
         system_message = SystemMessage(content=system_prompt)
         message_history = [system_message] + [input]
 
-        llm_output = llm_with_tools.invoke(message_history)
+        llm_output = await llm_with_tools.ainvoke(message_history)
 
         messages.append(llm_output)
 
         tool_calls, current_action_result = self.toolcall_parsing(llm_output)
 
-        if not tool_calls:
-            return {"messages": messages, "tool_calls": None, }
+        node_call_counts = state.get("node_call_counts", {})
+        node_call_counts["write_step_agent"] = node_call_counts.get("write_step_agent", 0) + 1
+
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[write_step_agent_node] |{time_}|离开write_step_agent_node节点")
+
+        if not tool_calls or state.get("task_finished", False):
+            return {"messages": messages, "tool_calls": None, "node_call_counts": node_call_counts,
+                    "task_finished": True}
         else:
             # return {"messages": messages}  # 返回更新后的消息历史
-            return {"messages": messages, "tool_calls": tool_calls
+            return {"messages": messages, "tool_calls": tool_calls,"node_call_counts": node_call_counts, "task_finished": False,
 
                     }
         pass

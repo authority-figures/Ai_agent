@@ -85,6 +85,37 @@ class ColorPrinter:
         print(f"{format_str}{'=' * width}")
 
     @classmethod
+    def print_noraml(cls, text, color="white", style="normal", bg=None, ):
+        """
+        打印彩色文本到控制台，带有特定格式的前缀和底部分隔线
+
+        参数:
+            text (str): 要打印的文本
+            color (str): 前景色，可选值: "black", "red", "green", "yellow", "blue", "magenta", "cyan", "white"
+            style (str): 文本样式，可选值: "normal", "bright", "dim"
+            bg (str): 背景色，可选值同color，默认None表示不设置背景色
+        """
+        # 构建格式化字符串
+        format_str = ""
+
+        # 添加样式
+        if style in cls.STYLES:
+            format_str += cls.STYLES[style]
+
+        # 添加前景色
+        if color in cls.COLORS:
+            format_str += cls.COLORS[color]
+
+        # 添加背景色
+        if bg in cls.BACKGROUNDS:
+            format_str += cls.BACKGROUNDS[bg]
+
+
+        # 打印主要内容
+        print(f"{format_str}{text}")
+
+
+    @classmethod
     def tool_name(cls, name):
         """打印工具名称"""
         cls.print(f"执行工具: {name}", "yellow", "bright", prefix="TOOL")
@@ -123,6 +154,11 @@ class ColorPrinter:
     def success(cls, message):
         """打印成功信息"""
         cls.print(message, "green", "bright", prefix="SUCCESS")
+
+    @classmethod
+    def debug_normal(cls, message,color="red"):
+        """打印调试信息"""
+        cls.print_noraml(message, color, "dim")
 
 
 def truncate_path_to(path, target_dir_name):

@@ -9,6 +9,8 @@ from agent_project_v2.agent.llm import chatGPT_llm
 from agent.nodes.interactive_graph.state import OverallState
 from agent.tools.interactive_graph_tools import using_tools
 from agent.nodes.node_publisher import send_state
+import time
+from agent.utils import ColorPrinter
 
 
 
@@ -20,13 +22,15 @@ class AgentNode:
     def __init__(self,config):
         self.config = config
 
-    def __call__(self, state: OverallState):
+    async def __call__(self, state: OverallState):
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[interactive_agent_node] |{time_}|进入interactive_agent_node节点",color="green")
         messages = state.get("messages", [])
         action_result = state.get("action_result", [])
         system_message = SystemMessage(content=system_prompt)
         message_history = [system_message] + messages
 
-        llm_output = llm_with_tools.invoke(message_history)
+        llm_output = await llm_with_tools.ainvoke(message_history)
 
 
         messages.append(llm_output)
@@ -34,6 +38,9 @@ class AgentNode:
         tool_calls, current_action_result = self.toolcall_parsing(llm_output)
 
         send_state("agent_node",{"status":"running","content":f"llm_output:{llm_output.content}\ntool_calls:{tool_calls}"})
+
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[interactive_agent_node] |{time_}|离开interactive_agent_node节点",color="green")
 
         if not tool_calls:
             return { "messages": messages,"tool_calls": None, "action_result": state.get("action_result", []),"AI_answer": llm_output.content}

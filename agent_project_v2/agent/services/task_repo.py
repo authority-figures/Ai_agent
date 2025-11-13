@@ -22,9 +22,9 @@ class TaskRepo:
 
             # 注意：publish 不能放在 pipeline 里（管道适合批量写操作，publish 是即时通知）
             # 发布任务创建消息，通知plan agent（如任务调度器）
-            await self.redis.publish("task_channel", task_id)
-
             print(f"[TaskRepo] created task {task_id}")
+            await self.redis.publish("task_channel", task_id)
+            print(f"[TaskRepo] published task {task_id} to task_channel")
             return {"status":"success","data":{"task_id":task_id,"task_name":task_name}}
         except Exception as e:
             print(f"[TaskRepo] create task failed: {e}")
@@ -119,18 +119,23 @@ class TaskRepo:
             existing_task = Task.from_hdict(existing_task_data)
 
             # 更新现有任务的字段
-            existing_task.task_name = updated_task.task_name
-            existing_task.description = updated_task.description
-            existing_task.status = updated_task.status
-            existing_task.plan = updated_task.plan
-            existing_task.execution = updated_task.execution
+            # existing_task.task_name = updated_task.task_name
+            # existing_task.description = updated_task.description
+            # existing_task.status = updated_task.status
+            # existing_task.plan = updated_task.plan
+            # existing_task.execution = updated_task.execution
+            # 更新现有任务的字段，只有字段值不为None时才更新
+            for field in ["task_name", "description", "status", "plan", "execution"]:
+                value = getattr(updated_task, field, None)
+                if value is not None and value != "null":
+                    setattr(existing_task, field, value)
             existing_task.updated_at = int(time.time())  # 更新时间戳
 
             # 将更新后的任务数据存回 Redis
             await self.redis.hset(f"task:{task_id}", mapping=existing_task.to_hdict())
 
             # 发布任务更新通知（如果需要）
-            await self.redis.publish("task_channel", task_id)
+            # await self.redis.publish("task_channel", task_id)
 
             print(f"[TaskRepo] Task {task_id} updated successfully.")
             return True

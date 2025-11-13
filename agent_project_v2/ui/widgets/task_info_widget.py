@@ -262,13 +262,17 @@ class TaskInfoWidget(QWidget):
 
     def show_step_detail(self, step_id):
         """显示指定 Step 详情"""
-        for task in self.tasks:
-            for s in task["plan"]:
-                if s["id"] == step_id:
-                    step = s
-                    self.step_detail_widget.update_step_detail(task,step_id)
-                    return
-        self.step_detail_widget.reset()
+        try:
+            for task in self.tasks:
+                for s in task["plan"]:
+                    if s["id"] == step_id:
+                        step = s
+                        self.step_detail_widget.update_step_detail(task,step_id)
+                        return
+            self.step_detail_widget.reset()
+        except Exception as e:
+            print(f"[task_info_widget][show_step_detail]错误：{e}")
+            self.step_detail_widget.reset()
 
 
 # ==============================================================

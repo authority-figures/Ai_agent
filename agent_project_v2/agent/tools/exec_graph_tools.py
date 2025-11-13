@@ -69,7 +69,7 @@ def write_execution_step(id:str,action:str,status:str,log:list[str])-> dict:
     参数:
     - id (str): 执行步骤的唯一标识符
     - action (str): 执行的具体操作描述
-    - status (str): 执行步骤的状态， # pending | finished | failed | cancelled
+    - status (str): 执行步骤的状态， #只能填写如下四种情况 pending | finished | failed | cancelled
     - log (list[str]): 执行步骤的日志信息列表
     返回:
     - Task: 更新后的任务对象,以标准的json格式返回结果，结构为ExecutionStep 的dict
