@@ -2,6 +2,8 @@
 from langgraph.prebuilt import ToolNode, ToolInvocation
 from agent.nodes.node_publisher import send_state
 from agent.tools.plan_graph_tools import using_tools
+import time
+from agent.utils import ColorPrinter
 
 
 class CustomToolNode:
@@ -11,6 +13,8 @@ class CustomToolNode:
         self.post_fn = post_fn
 
     async def __call__(self, state: dict):
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[plan_tool_node] |{time_}|进入plan_tool_node节点", color="blue")
         if self.pre_fn:
             state = self.pre_fn(state)
 
@@ -22,6 +26,9 @@ class CustomToolNode:
             print(f"Tool execution error: {e}")
             send_state("tool_execution_node", {"status": "error", "content": str(e)})
             raise e
+
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[plan_tool_node] |{time_}|离开plan_tool_node节点", color="blue")
 
         if self.post_fn:
             state = self.post_fn(state)

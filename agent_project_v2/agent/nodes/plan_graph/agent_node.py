@@ -5,13 +5,14 @@ from agent.llm import chatGPT_llm
 from agent.nodes.plan_graph.state import OverallState
 from agent.tools.plan_graph_tools import using_tools
 from agent.tools.simulation_tools import using_tools as simulation_tools
-
+import time
+from agent.utils import ColorPrinter
 
 
 
 llm = chatGPT_llm(model_name="gpt-4o-mini",temperature=0)
 llm_with_tools = llm.bind_tools(using_tools + simulation_tools)
-system_prompt = ("你是一个AI助理,负责依据传入的任务来制定执行计划,例如，当任务为移动机械臂到目标点（1，1，1），姿态为（0，0，0，1）。则应该分为1.获取机械臂当前位置；2.使用规划工具规划出当前点到目标点的路径点；3.执行该路径\n"
+system_prompt = ("你是一个AI助理,负责依据传入的任务来制定执行计划,请你仔细阅读description字段来制定plan,例如，当任务为移动机械臂到目标点（1，1，1），姿态为（0，0，0，1）。则应该分为1.获取机械臂当前位置；2.使用规划工具规划出当前点到目标点的路径点；3.执行该路径\n"
                  "你会看到有些用于执行的工具，但你需要记住，你不要使用它，你只需要知道这些工具是你制定的计划中可能会使用的")
 
 class AgentNode:
@@ -19,6 +20,8 @@ class AgentNode:
         self.config = config
 
     async def __call__(self, state: OverallState):
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[plan_agent_node] |{time_}|进入plan_agent_node节点", color="blue")
         messages = state.get("messages", [])
         action_result = state.get("action_result", [])
         system_message = SystemMessage(content=system_prompt)
@@ -31,6 +34,8 @@ class AgentNode:
 
         tool_calls, current_action_result = self.toolcall_parsing(llm_output)
 
+        time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
+        ColorPrinter.debug_normal(f"[plan_agent_node] |{time_}|离开plan_agent_node节点", color="blue")
 
         if not tool_calls:
             return { "messages": messages,"tool_calls": None, "action_result": state.get("action_result", []),"AI_answer": llm_output.content}

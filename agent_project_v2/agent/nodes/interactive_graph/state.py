@@ -19,3 +19,4 @@ class OverallState(TypedDict):
     messages: Annotated[List[BaseMessage], add_messages]
     action_result: list  # 存储工具调用结果
     tool_calls: list # 存储工具调用
+    finished_task_id: Optional[str]

@@ -94,6 +94,12 @@ class MainWindow(QMainWindow):
             lambda state_dict:self.on_agent_update({**state_dict,"current_node": state_dict.get("node","")})
         )
 
+        # 将图状态更新信号连接到agent回复函数，用于finished_task_channel信息发布
+        self.agent_graph_view.messageState_updated.connect(
+            lambda message_data: self.on_agent_reply(str(message_data.get('state',{}).get("content","")))
+            if message_data.get("node", None) == "finished_task" else None
+        )
+
         self.agent_graph_view.graph_widget.node_double_clicked.connect(self.node_detail_view.display_node_state)
 
         # 连接信号
