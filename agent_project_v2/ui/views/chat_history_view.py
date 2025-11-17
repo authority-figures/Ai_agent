@@ -7,7 +7,7 @@ class ChatHistoryView(QWidget):
         layout = QVBoxLayout(self)
 
         # 标题
-        title = QLabel("对话历史")
+        title = QLabel("log")
         title.setStyleSheet("font-size: 16px; font-weight: bold;")
         layout.addWidget(title)
 

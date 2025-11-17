@@ -22,6 +22,8 @@ def answer_node(state: OverallState):
     send_state("answer_node", {"status": "running", "content": AI_answer})
     if state.get("finished_task_id", None):
         send_state("finished_task", {"status": "running", "content": AI_answer})
+
     color_printer.llm_output(f"AI回答: {answer}")
     time_ = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime())
     ColorPrinter.debug_normal(f"[interactive answer_node] |{time_}|离开interactive answer_node节点", color="green")
+    return {"finished_task_id":None}

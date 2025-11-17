@@ -1,5 +1,5 @@
 import sys,os
-
+import logging
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ))
 import requests
 from PyQt5.QtWidgets import QMainWindow, QSplitter, QWidget, QHBoxLayout, QVBoxLayout, QDockWidget
@@ -11,10 +11,12 @@ from node_detail_view import NodeDetailView
 from chat_history_view import ChatHistoryView
 from agent_chat_view import AgentChatView, AgentWorker
 from task_info_view import TaskInfoView
+from ui.widgets.qt_log_handler import QtLogHandler
 
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+
         self.setWindowTitle("Agent Robot Control System")
         self.setGeometry(100, 100, 1600, 900)
 
@@ -80,6 +82,9 @@ class MainWindow(QMainWindow):
         main_splitter.addWidget(right_splitter)
         main_splitter.setStretchFactor(1, 4)  # 右侧占40%
 
+        self.create_log_handler()
+
+
         self.setCentralWidget(main_splitter)
         self.agent_chat_view.messageSent.connect(self.handle_agent_reply)
         # # 将图状态更新信号连接到聊天视图的槽函数（send state）
@@ -112,6 +117,28 @@ class MainWindow(QMainWindow):
     #     agent_service = ServiceLocator.get('agent_service')
     #     node_info = agent_service.get_node_info(node_id)
     #     self.node_detail_view.display_node_info(node_info)
+
+    def create_log_handler(self):
+        # 1. 创建 handler
+        self.qt_handler = QtLogHandler()
+        self.qt_handler.setLevel(logging.INFO)  # 需要什么级别自己调
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        self.qt_handler.setFormatter(formatter)
+
+        # 2. 连接信号 -> 槽函数
+        self.qt_handler.log_signal.connect(self.append_log)
+
+        # 3. 把 handler 装到 root logger 上，这样所有 logger 都会走这里
+        root_logger = logging.getLogger()
+        root_logger.setLevel(logging.INFO)
+        root_logger.addHandler(self.qt_handler)
+
+    def append_log(self, text: str):
+        """在 Qt 界面上追加一行日志"""
+        self.chat_history_view.chat_history.append(text)
+
 
     def on_agent_update(self, state):
         """更新Agent状态"""
