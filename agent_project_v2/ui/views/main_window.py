@@ -2,7 +2,7 @@ import sys,os
 import logging
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), ))
 import requests
-from PyQt5.QtWidgets import QMainWindow, QSplitter, QWidget, QHBoxLayout, QVBoxLayout, QDockWidget
+from PyQt5.QtWidgets import QMainWindow, QSplitter, QTabWidget
 from PyQt5.QtCore import Qt
 from simulation_view import SimulationView
 
@@ -10,6 +10,7 @@ from agent_graph_view import AgentGraphView
 from node_detail_view import NodeDetailView
 from chat_history_view import ChatHistoryView
 from agent_chat_view import AgentChatView, AgentWorker
+from digital_twin_view import DigitalTwinView
 from task_info_view import TaskInfoView
 from ui.widgets.qt_log_handler import QtLogHandler
 
@@ -23,9 +24,17 @@ class MainWindow(QMainWindow):
         # 创建主分割器（左右布局）
         main_splitter = QSplitter(Qt.Horizontal)
 
+
+        # ===== 左侧：标签页容器（Simulation / Digital Twin）=====
         # # 左侧：仿真视图（占60%宽度）
+        self.tab_widget = QTabWidget()
         self.simulation_view = SimulationView()
-        main_splitter.addWidget(self.simulation_view)
+        self.tab_widget.addTab(self.simulation_view, "Simulation")
+        # 数字孪生视图
+        self.digital_twin_view = DigitalTwinView()
+        self.tab_widget.addTab(self.digital_twin_view, "Digital Twin")
+
+        main_splitter.addWidget(self.tab_widget)
         main_splitter.setStretchFactor(0, 6)  # 6:4的比例
         # dock = QDockWidget("Simulation", self)
         # dock.setWidget(self.simulation_view)

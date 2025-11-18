@@ -44,7 +44,7 @@ class PbOMPLRobot(Robot):
 
 
     def _is_not_fixed(self, joint_idx):
-        joint_info = p.getJointInfo(self.id_robot, joint_idx)
+        joint_info = p.getJointInfo(self.id_robot, joint_idx,physicsClientId=self.id_client)
         return joint_info[2] != p.JOINT_FIXED
 
     def get_joint_bounds(self):
@@ -61,7 +61,7 @@ class PbOMPLRobot(Robot):
         # print("Joint bounds: {}".format(self.joint_bounds))
 
         for i, joint_id in enumerate(self.ids_avail_joints):
-            joint_info = p.getJointInfo(self.id_robot, joint_id)
+            joint_info = p.getJointInfo(self.id_robot, joint_id,physicsClientId=self.id_client)
             low = joint_info[8]  # low bounds
             high = joint_info[9] # high bounds
             if low < high:
@@ -99,7 +99,7 @@ class PbOMPLRobot(Robot):
 
     def _set_joint_positions(self, joints, positions):
         for joint, value in zip(joints, positions):
-            p.resetJointState(self.id_robot, joint, value, targetVelocity=0)
+            p.resetJointState(self.id_robot, joint, value, targetVelocity=0,physicsClientId=self.id_client)
 
 class PbStateSpace(ob.RealVectorStateSpace):
     def __init__(self, num_dim) -> None:
@@ -286,11 +286,12 @@ class PbOMPL():
                     p.setJointMotorControl2(self.robot.id_robot, i, p.POSITION_CONTROL, q[i],force=10000 * 240.,
                                     positionGain = 0.5,  # KP
                                     velocityGain = 1.5,  # KD
+                                            physicsClientId=self.robot.id_client
 
                                             )
             else:
                 self.robot.set_state(q)
-            p.stepSimulation()
+            p.stepSimulation(physicsClientId=self.robot.id_client)
             time.sleep(1/240.)
 
 

@@ -3,12 +3,7 @@ import asyncio
 
 import uvicorn
 import numpy as np
-import threading
-import time
-
-
 from fastapi import FastAPI,Request
-from pydantic import BaseModel
 from execution.simulation.environment import SimulationEnvironment
 from execution.simulation.models import *
 from core.simulation_request import *
@@ -16,7 +11,8 @@ from core.simulation_request import *
 # 创建 FastAPI 服务器
 app = FastAPI()
 sim_env = SimulationEnvironment()
-
+# sim_env.initialize()
+print("sim_env physicsClientId:", sim_env.physics_client)
 
 @app.post("/start_simulation")
 async def start_simulation():

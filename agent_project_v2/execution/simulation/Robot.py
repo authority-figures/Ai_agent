@@ -171,7 +171,7 @@ class Robot:
 
         if linkIndex == -1:
             # 对于基础部分，使用getBasePositionAndOrientation获取位置和姿态
-            endEffectorState = p.getBasePositionAndOrientation(self.id_robot)
+            endEffectorState = p.getBasePositionAndOrientation(self.id_robot,physicsClientId=self.id_client)
             if type==0:
                 # 返回的是link质心的坐标系
                 endEffectorPos, endEffectorOri = endEffectorState[0], endEffectorState[1]
@@ -179,7 +179,7 @@ class Robot:
                 endEffectorPos, endEffectorOri = endEffectorState[0], endEffectorState[1]   # 质心坐标系在世界坐标系下的表示
                 # 将质心偏移向量转换到世界坐标系
                 # 首先，需要将四元数转换为旋转矩阵
-                rot_matrix = np.array(p.getMatrixFromQuaternion(endEffectorOri)).reshape(3, 3)
+                rot_matrix = np.array(p.getMatrixFromQuaternion(endEffectorOri,physicsClientId=self.id_client)).reshape(3, 3)
 
                 # 应用旋转矩阵到偏移向量
                 offset_world = rot_matrix.dot(self.baseFramePosition)
@@ -189,7 +189,7 @@ class Robot:
 
 
         else:
-            endEffectorState = p.getLinkState(self.id_robot, linkIndex)
+            endEffectorState = p.getLinkState(self.id_robot, linkIndex,physicsClientId=self.id_client)
         # endEffectorPos = endEffectorState[0]
         # 假设endEffectorPos和endEffectorOri是你从getLinkState获取的位置和方向
             if type == 0:
@@ -198,7 +198,7 @@ class Robot:
             else:
                 endEffectorPos, endEffectorOri = endEffectorState[4], endEffectorState[5]
         # 计算旋转矩阵
-        rot_matrix = p.getMatrixFromQuaternion(endEffectorOri)
+        rot_matrix = p.getMatrixFromQuaternion(endEffectorOri,physicsClientId=self.id_client)
         rot_matrix = np.array(rot_matrix).reshape(3, 3)
 
         # 定义轴的长度
@@ -220,6 +220,7 @@ class Robot:
                                                                                              self.debug_lines.get(name) and
                                                                                              self.debug_lines.get(name).get('line_x_axis') and
                                                                                              lifetime==-1) else -1,
+                                                                       physicsClientId=self.id_client
                                )
             # 绘制Y轴（绿色）
 
@@ -232,6 +233,7 @@ class Robot:
                                                                                    self.debug_lines.get(name).get(
                                                                                        'line_y_axis') and
                                                                                    lifetime == -1) else -1,
+                                                                       physicsClientId=self.id_client
                                                                        )
 
             # 绘制Z轴（蓝色）
@@ -245,6 +247,7 @@ class Robot:
                                                                                    self.debug_lines.get(name).get(
                                                                                        'line_z_axis') and
                                                                                    lifetime == -1) else -1,
+                                                                       physicsClientId=self.id_client
                                                                        )
         else:
             self.line_x_axis = p.addUserDebugLine(endEffectorPos, endEffectorPos + x_axis, lineColorRGB=[1, 0, 0],
@@ -252,6 +255,7 @@ class Robot:
                                                   lifeTime=lifetime if lifetime >= 0 else 0,
                                                   replaceItemUniqueId=self.line_x_axis if (
                                                               self.line_x_axis is not None and lifetime == -1) else -1,
+                                                  physicsClientId=self.id_client
                                                   )
             # 绘制Y轴（绿色）
             self.line_y_axis = p.addUserDebugLine(endEffectorPos, endEffectorPos + y_axis, lineColorRGB=[0, 1, 0],
@@ -259,6 +263,7 @@ class Robot:
                                                   lifeTime=lifetime if lifetime >= 0 else 0,
                                                   replaceItemUniqueId=self.line_y_axis if (
                                                               self.line_y_axis is not None and lifetime == -1) else -1,
+                                                  physicsClientId=self.id_client
                                                   )
 
             # 绘制Z轴（蓝色）
@@ -267,6 +272,7 @@ class Robot:
                                                   lifeTime=lifetime if lifetime >= 0 else 0,
                                                   replaceItemUniqueId=self.line_z_axis if (
                                                               self.line_z_axis is not None and lifetime == -1) else -1,
+                                                  physicsClientId=self.id_client
                                                   )
         return np.array(endEffectorPos), np.array(endEffectorOri)
         pass
@@ -505,6 +511,7 @@ class Robot:
                                                         maxNumIterations=maxNumIteration,
                                                         jointDamping=damping,
                                                         # currentPositions=currentPosition,
+                                                        physicsClientId=self.id_client,
                                                         )
             self.set_joints_states(current_joint_positions)
         else:
@@ -792,6 +799,7 @@ class Robot:
                 p.POSITION_CONTROL, targetPosition=joint_positions[i],force=force,
                 targetVelocity=0, maxVelocity=maxVelocity,
                 positionGain=0.5, velocityGain=0.5,
+                physicsClientId=self.id_client,
             )
 
         if timeout>=0:
@@ -810,6 +818,7 @@ class Robot:
                     self.id_robot, self.ids_avail_joints[i],
                     p.VELOCITY_CONTROL,
                     targetVelocity=0,
+                    physicsClientId=self.id_client,
                 )
 
         return "Robot moved successfully"

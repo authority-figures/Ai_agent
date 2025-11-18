@@ -112,30 +112,31 @@ class RM_sys:
                 jointDamping=0.2,
                 mass=10,
                 linearDamping=0.5, angularDamping=0.5,
+                physicsClientId=self.id_client
             )
         force = 10000
         if type == 'velocity':
             mode = p.VELOCITY_CONTROL
-            p.setJointMotorControl2(machine.id_robot, 0, mode, targetVelocity=0, force=force)
-            p.setJointMotorControl2(machine.id_robot, 1, mode, targetVelocity=0, force=force)
-            p.setJointMotorControl2(machine.id_robot, 2, mode, targetVelocity=0, force=force)
-            p.setJointMotorControl2(machine.id_robot, 3, mode, targetVelocity=0, force=force)
-            p.setJointMotorControl2(machine.id_robot, 4, mode, targetVelocity=0, force=force)
-            p.setJointMotorControl2(machine.id_robot, 5, mode, targetVelocity=0, force=force)
+            p.setJointMotorControl2(machine.id_robot, 0, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+            p.setJointMotorControl2(machine.id_robot, 1, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+            p.setJointMotorControl2(machine.id_robot, 2, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+            p.setJointMotorControl2(machine.id_robot, 3, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+            p.setJointMotorControl2(machine.id_robot, 4, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+            p.setJointMotorControl2(machine.id_robot, 5, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
         else:
             mode = p.POSITION_CONTROL
             p.setJointMotorControl2(machine.id_robot, 0, mode, targetPosition=init_pos[0], targetVelocity=0,
-                                    force=force)
+                                    force=force,physicsClientId=self.id_client)
             p.setJointMotorControl2(machine.id_robot, 1, mode, targetPosition=init_pos[1], targetVelocity=0,
-                                    force=force)
+                                    force=force,physicsClientId=self.id_client)
             p.setJointMotorControl2(machine.id_robot, 2, mode, targetPosition=init_pos[2], targetVelocity=0,
-                                    force=force)
+                                    force=force,physicsClientId=self.id_client)
             p.setJointMotorControl2(machine.id_robot, 3, mode, targetPosition=init_pos[3], targetVelocity=0,
-                                    force=force)
+                                    force=force,physicsClientId=self.id_client)
             p.setJointMotorControl2(machine.id_robot, 4, mode, targetPosition=init_pos[4], targetVelocity=0,
-                                    force=force)
+                                    force=force,physicsClientId=self.id_client)
             p.setJointMotorControl2(machine.id_robot, 5, mode, targetPosition=init_pos[5], targetVelocity=0,
-                                    force=force)
+                                    force=force,physicsClientId=self.id_client)
 
     def init_robot(self,robot):
         # for i in range(robot.num_avail_joints):
@@ -149,6 +150,7 @@ class RM_sys:
                 jointDamping=0.1,
                 mass=0.1,
                 angularDamping=0.5,
+                physicsClientId=self.id_client
 
             )
 
@@ -157,17 +159,17 @@ class RM_sys:
 
         force = 10000
         mode = p.VELOCITY_CONTROL
-        p.setJointMotorControl2(robot.id_robot, 0, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(robot.id_robot, 1, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(robot.id_robot, 2, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(robot.id_robot, 3, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(robot.id_robot, 4, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(robot.id_robot, 5, mode, targetVelocity=0, force=force)
+        p.setJointMotorControl2(robot.id_robot, 0, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+        p.setJointMotorControl2(robot.id_robot, 1, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+        p.setJointMotorControl2(robot.id_robot, 2, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+        p.setJointMotorControl2(robot.id_robot, 3, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+        p.setJointMotorControl2(robot.id_robot, 4, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
+        p.setJointMotorControl2(robot.id_robot, 5, mode, targetVelocity=0, force=force,physicsClientId=self.id_client)
 
         # for i in range(robot.id_end_effector):
         #     p.changeDynamics(robot.id_robot, i, mass=10)
         for _ in range(100):
-            p.stepSimulation()
+            p.stepSimulation(physicsClientId=self.id_client)
             # time.sleep(1/240.)
         pass
 
@@ -180,18 +182,18 @@ class RM_sys:
                 linkIndex=i,
                 jointDamping=0.2,
                 mass=0.01,
-                linearDamping=0.5, angularDamping=0.5,
+                linearDamping=0.5, angularDamping=0.5,physicsClientId=self.id_client
             )
         force = 100000
         mode = p.POSITION_CONTROL
         p.setJointMotorControl2(rolling_tool.id_robot, 0, mode, targetPosition=0, targetVelocity=0,
                                 positionGain=0.5,  # KP
                                 velocityGain=0.5,  # KD
-                                force=force, )
+                                force=force, physicsClientId=self.id_client)
         p.setJointMotorControl2(rolling_tool.id_robot, 1, mode, targetPosition=0, targetVelocity=0,
                                 positionGain=0.5,  # KP
                                 velocityGain=0.5,  # KD
-                                force=force, )
+                                force=force, physicsClientId=self.id_client)
 
         pass
 
@@ -215,15 +217,16 @@ class RM_sys:
                                            parentFramePosition=robot_end_in_mass_sys,
                                            childFramePosition=gripper_in_mass_sys,
                                            childFrameOrientation=p.getQuaternionFromEuler((3.14, 0, 1.57 / 2)),
+                                           physicsClientId=self.id_client,
                                            )
 
-        p.changeConstraint(constraint_id, maxForce=1e8, )
+        p.changeConstraint(constraint_id, maxForce=1e8, physicsClientId=self.id_client)
         p.setCollisionFilterPair(gripper.id_robot, robot.id_robot, -1, robot.id_end_effector, 0,
                                  physicsClientId=physicsClientId)
         self.point_in_ee_frame, self.robot_target_ori = [0, 0, 0.13345], [1.88005569e-11, -6.09188950e-04,
                                                                           3.82499073e-01, 9.23955674e-01]
         for _ in range(200):
-            p.stepSimulation()
+            p.stepSimulation(physicsClientId=physicsClientId)
 
         pass
 
@@ -272,7 +275,7 @@ class RM_sys:
         #                                         physicsClientId=self.id_client)
         p.changeConstraint(fixed_joint, maxForce=1e8, )
         for _ in range(100):
-            p.stepSimulation()
+            p.stepSimulation(physicsClientId=self.id_client)
         workpiece_mass_pos,workpiece_ori = p.getBasePositionAndOrientation(workpiece.id_robot)[0:2]
         workpiece_mass_in_link = workpiece.baseFramePosition
         workpiece_pos = np.array(workpiece_mass_pos) - R.from_quat(workpiece_ori).as_matrix() @ np.array(workpiece_mass_in_link)
@@ -331,34 +334,34 @@ class RM_sys:
         childFramePosition = new_childFramePosition
 
         constraintId = p.createConstraint(parentBodyUniqueId, parentLinkIndex, childBodyUniqueId, childLinkIndex,
-                                          jointType, jointAxis, parentFramePosition, childFramePosition, **kwargs)
+                                          jointType, jointAxis, parentFramePosition, childFramePosition,physicsClientId=physicsClientId, **kwargs)
         return constraintId
         pass
 
     def set_R_W_M_collision(self,robot:Robot,workpiece_id, machine:Machine, rolling_tool:Gripper):
         for i in range(-1, robot.id_end_effector + 1):
             for j in range(-1, machine.workpiece.num_all_joints + 1):
-                p.setCollisionFilterPair(robot.id_robot, workpiece_id, i, j, 0)
-            p.setCollisionFilterPair(robot.id_robot, machine.id_robot, i, 0, 0)
-            p.setCollisionFilterPair(robot.id_robot, machine.id_robot, i, -1, 0)
-            p.setCollisionFilterPair(robot.id_robot, machine.id_robot, i, 1, 0)
-            p.setCollisionFilterPair(robot.id_robot, machine.id_robot, i, 2, 0)
-            p.setCollisionFilterPair(robot.id_robot, machine.id_tool, i, -1, 0)
-            p.setCollisionFilterPair(robot.id_robot, machine.id_tool, i, 0, 0)
+                p.setCollisionFilterPair(robot.id_robot, workpiece_id, i, j, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(robot.id_robot, machine.id_robot, i, 0, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(robot.id_robot, machine.id_robot, i, -1, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(robot.id_robot, machine.id_robot, i, 1, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(robot.id_robot, machine.id_robot, i, 2, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(robot.id_robot, machine.id_tool, i, -1, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(robot.id_robot, machine.id_tool, i, 0, 0,physicsClientId=self.id_client)
 
         for i in range(-1, rolling_tool.num_all_joints + 1):
             for j in range(-1, machine.workpiece.num_all_joints + 1):
-                p.setCollisionFilterPair(rolling_tool.id_robot, workpiece_id, i, j, 0)
-            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_robot, i, 0, 0)
-            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_robot, i, -1, 0)
-            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_robot, i, 1, 0)
-            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_robot, i, 2, 0)
-            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_tool, i, -1, 0)
-            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_tool, i, 0, 0)
+                p.setCollisionFilterPair(rolling_tool.id_robot, workpiece_id, i, j, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_robot, i, 0, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_robot, i, -1, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_robot, i, 1, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_robot, i, 2, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_tool, i, -1, 0,physicsClientId=self.id_client)
+            p.setCollisionFilterPair(rolling_tool.id_robot, machine.id_tool, i, 0, 0,physicsClientId=self.id_client)
 
         for i in range(-1, rolling_tool.num_all_joints + 1):
             for j in range(-1, robot.id_end_effector + 1):
-                p.setCollisionFilterPair(rolling_tool.id_robot, robot.id_robot, i, j, 0)
+                p.setCollisionFilterPair(rolling_tool.id_robot, robot.id_robot, i, j, 0,physicsClientId=self.id_client)
 
 
     def get_point_in_workpiece2robot(self, pos, ori,inverse=False):
@@ -404,12 +407,12 @@ class RM_sys:
         pass
 
     def get_work_piece_sys_point_in_world_sys(self, pos=[], ori=[]):
-        workpiece_state = p.getLinkState(self.workpiece_id, 0)
+        workpiece_state = p.getLinkState(self.workpiece_id, 0,physicsClientId=self.id_client)
         workpiece_pos = np.array(workpiece_state[4])
         workpiece_ori = np.array(workpiece_state[5])
 
         # 计算旋转矩阵
-        rotation_matrix = np.array(p.getMatrixFromQuaternion(workpiece_ori)).reshape(3, 3)
+        rotation_matrix = np.array(p.getMatrixFromQuaternion(workpiece_ori,physicsClientId=self.id_client)).reshape(3, 3)
 
         # 构建齐次变换矩阵
         transform_matrix = np.eye(4)
@@ -441,10 +444,10 @@ class RM_sys:
     def bind_cam2robot(self, robot: Robot, camera: Robot, pos_in_robot_end_link=[0, 0, 0],
                        pos_in_cam_base_link=[0, 0, 0], ori_in_cam_base_link=[0, 0, 0]):
 
-        robot_end_mass = Robot.get_com_in_link_frame(robot.id_robot, robot.id_end_effector)
+        robot_end_mass = Robot.get_com_in_link_frame(robot.id_robot, robot.id_end_effector,physicsClientId=self.id_client)
         robot_end_in_mass_sys = np.array(pos_in_robot_end_link) - np.array(robot_end_mass)
 
-        camera_mass = Robot.get_com_in_link_frame(camera.id_robot, -1, baseFramePosition=camera.baseLinkPosition)
+        camera_mass = Robot.get_com_in_link_frame(camera.id_robot, -1, baseFramePosition=camera.baseLinkPosition,physicsClientId=self.id_client)
         camera_in_mass_sys = -np.array(camera.baseFramePosition)
 
         constraint_id = p.createConstraint(parentBodyUniqueId=robot.id_robot,
@@ -456,9 +459,10 @@ class RM_sys:
                                            parentFramePosition=robot_end_in_mass_sys,
                                            childFramePosition=camera_in_mass_sys,
                                            childFrameOrientation=p.getQuaternionFromEuler(ori_in_cam_base_link),
+                                           physicsClientId=self.id_client
                                            )
 
-        p.changeConstraint(constraint_id, maxForce=1e6, )
+        p.changeConstraint(constraint_id, maxForce=1e6, physicsClientId=self.id_client)
         # # p.changeConstraint(constraint_id,  erp=0.2)
         for i in range(camera.id_end_effector + 1):
             p.setCollisionFilterPair(camera.id_robot, robot.id_robot, i, robot.id_end_effector,
@@ -474,7 +478,7 @@ class RM_sys:
                                  0,
                                  physicsClientId=self.id_client)
         #
-        p.changeDynamics(camera.id_robot, -1, mass=0.001)
+        p.changeDynamics(camera.id_robot, -1, mass=0.001,physicsClientId=self.id_client)
         #
         # for _ in range(10):
         #     p.stepSimulation()
@@ -498,11 +502,11 @@ class RM_sys:
         pass
 
     def update_cam_pos(self):
-        RGB_camera_state = p.getLinkState(self.camera.id_robot, 3)
+        RGB_camera_state = p.getLinkState(self.camera.id_robot, 3,physicsClientId=self.id_client)
         # 获取四元数
         orientation_quat = RGB_camera_state[5]
         # 将四元数转换为旋转矩阵
-        rot_matrix = p.getMatrixFromQuaternion(orientation_quat)
+        rot_matrix = p.getMatrixFromQuaternion(orientation_quat,physicsClientId=self.id_client)
         rot_matrix = np.array(rot_matrix).reshape(3, 3)  # 转换为3x3矩阵
         # 定义局部 z 轴向量
         local_z_axis = np.array([0, 0, 1])
@@ -517,7 +521,8 @@ class RM_sys:
             p.setJointMotorControl2(robot.id_robot, i, mode, targetPosition=joint, targetVelocity=0,
                                     positionGain=0.05,  # KP
                                     velocityGain=0.2,  # KD
-                                    force=force
+                                    force=force,
+                                    physicsClientId=self.id_client
                                     )
         pass
 

@@ -15,7 +15,9 @@ import asyncio
 
 # pybullet相关-----------------------------------
 import multiprocessing as mp
+from api.routers.physical_info import run_physical_executor_service
 from api.routers.pybullet_info import run_pybullet_service
+
 
 
 
@@ -37,7 +39,7 @@ app.include_router(task_router)    # 注册任务相关的路由
 
 # 定义全局变量来存储PyBullet仿真进程
 pybullet_proc = None
-
+physical_proc = None
 # 可选：根路径的简单响应
 @app.get("/")
 async def root():
@@ -100,6 +102,12 @@ async def startup_event():
     pybullet_proc.start()
     print("[Fast api:main] PyBullet simulation started.")
 
+    # 启动physical真实机械臂控制进程
+    physical_proc = mp.Process(target=run_physical_executor_service)
+    physical_proc.start()
+    print("[Fast api:main] Physical simulation started.")
+
+
 @app.on_event("shutdown")
 async def shutdown_event():
     await plan_info.shutdown_event()
@@ -109,8 +117,13 @@ async def shutdown_event():
     print("Shutting down PyBullet simulation.")
     # 如果使用多进程管理PyBullet，确保在这里终止PyBullet进程
     # 这里可以通过共享的信号或 IPC 机制来停止 PyBullet 进程
-    pybullet_proc.terminate()
-    print("PyBullet simulation stopped.")
+    if pybullet_proc:
+        pybullet_proc.terminate()
+        print("PyBullet simulation stopped.")
+    if physical_proc:
+        physical_proc.terminate()
+        print("Physical simulation stopped.")
+
 
 
 

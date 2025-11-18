@@ -1,12 +1,7 @@
-import pybullet as p
-import pybullet_data
-import numpy as np
-from typing import TypedDict, Annotated, Union, Optional,Type,List
+
 import sys,os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ''))
-from Robot import Robot
-from Machine import Machine
-from RM_sys import RM_sys
+
 from execution.simulation import pb_ompl,taskspaceRRT
 
 from calibrator import *
@@ -55,8 +50,8 @@ class SimulationEnvironment:
                                    physicsClientId=self.physics_client)
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0, physicsClientId=self.physics_client) # 关闭GUI信息展示
 
-        p.setAdditionalSearchPath(pybullet_data.getDataPath())
-        p.loadURDF("plane.urdf")
+        p.setAdditionalSearchPath(pybullet_data.getDataPath(), physicsClientId=self.physics_client)  # 设置搜索路径
+        p.loadURDF("plane.urdf", physicsClientId=self.physics_client)  # 加载平面
         # p.setGravity(0, 0, -9.81)
         self.running = True
         print("Simulation environment initialized")
@@ -75,30 +70,30 @@ class SimulationEnvironment:
         robot_with_rolling_tool_urdf = os.path.join(self.base_path, robot_with_rolling_tool_urdf)
         machine = Machine(self.physics_client)
         self.machine = machine
-        machine.load_urdf(fileName=machine_file_name, basePosition=(0, 0, 0), useFixedBase=1, flags=0, )
+        self.machine.load_urdf(fileName=machine_file_name, basePosition=(0, 0, 0), useFixedBase=1, flags=0, )
         self.object_list.append(self.machine.id_robot)
         self.workpiece_pose = [0.0, 0.05, 0.1]
         orientation = [0.0, 0.0, 0.0]
-        quaternion = p.getQuaternionFromEuler(orientation)
+        quaternion = p.getQuaternionFromEuler(orientation,physicsClientId=self.physics_client)
         self.workpiece_orientation = quaternion
-        self.workpiece_id = machine.add_workpiece_to_machine(workpiece_urdf, position=self.workpiece_pose,
+        self.workpiece_id = self.machine.add_workpiece_to_machine(workpiece_urdf, position=self.workpiece_pose,
                                                              orientation=orientation)
 
         # self.object_list.append(self.workpiece_id)
         robot_id = self.load_robot(urdf_path=robot_with_rolling_tool_urdf, basePosition=(-0.15, -0.15, 0.7), baseOrientation=(0.7,0,0,0.7),useFixedBase=0,
                             start=[0, 0, PI / 2, 0, 0, 0], )
         # 消除执行器于机械臂末端的碰撞
-        p.setCollisionFilterPair(robot_id, robot_id, 5, 7, 0)
-        p.setCollisionFilterPair(robot_id, robot_id, 5, 8, 0)
-        p.setCollisionFilterPair(robot_id, robot_id, 4, 8, 0)
+        p.setCollisionFilterPair(robot_id, robot_id, 5, 7, 0,physicsClientId=self.physics_client)
+        p.setCollisionFilterPair(robot_id, robot_id, 5, 8, 0,physicsClientId=self.physics_client)
+        p.setCollisionFilterPair(robot_id, robot_id, 4, 8, 0,physicsClientId=self.physics_client)
 
         # 设置机械臂-rolling_tools的tcp坐标
-        ee_pos,ee_orn = p.getLinkState(robot_id, 6)[4:6]
-        tcp_pos, tcp_orn = p.getLinkState(robot_id, 10)[4:6]
+        ee_pos,ee_orn = p.getLinkState(robot_id, 6,physicsClientId=self.physics_client)[4:6]
+        tcp_pos, tcp_orn = p.getLinkState(robot_id, 10,physicsClientId=self.physics_client)[4:6]
         tcp_in_ee_matrix = self.robot_list[0].TAB_with_AinW_and_BinW(tcp_pos, tcp_orn,ee_pos, ee_orn)
         self.robot_list[0].add_tcp("rolling_tool",tcp_in_ee_matrix)
-        ee_pos, ee_orn = p.getLinkState(robot_id, 6)[4:6]
-        tcp_pos, tcp_orn = p.getLinkState(robot_id, 7)[4:6]
+        ee_pos, ee_orn = p.getLinkState(robot_id, 6,physicsClientId=self.physics_client)[4:6]
+        tcp_pos, tcp_orn = p.getLinkState(robot_id, 7,physicsClientId=self.physics_client)[4:6]
         tcp_in_ee_matrix = self.robot_list[0].TAB_with_AinW_and_BinW(tcp_pos, tcp_orn, ee_pos, ee_orn)
         self.robot_list[0].add_tcp("rolling_tool_base", tcp_in_ee_matrix)
 
@@ -116,8 +111,8 @@ class SimulationEnvironment:
 
 
         # 绑定机床到机械臂
-        self.rm_sys.init_machine(machine, type='velocity')
-        self.rm_sys.create_constrain(machine,self.robot_list[0],parentPosition=[-0.2, +0.1, 0.08], childOrientation=[0.7068252, 0, 0, 0.7073883]
+        self.rm_sys.init_machine(self.machine, type='velocity')
+        self.rm_sys.create_constrain(self.machine,self.robot_list[0],parentPosition=[-0.2, +0.1, 0.08], childOrientation=[0.7068252, 0, 0, 0.7073883]
                                      ,workpiece_pos=self.workpiece_pose,workpiece_ori=self.workpiece_orientation)
         self.rm_sys.init_robot(self.robot_list[0])
 
@@ -128,7 +123,7 @@ class SimulationEnvironment:
         self.rm_sys.robot_list.append(self.board)
         self.rm_sys.robot_list.append(self.machine.workpiece)
         pos, ori = self.rm_sys.get_point_in_workpiece2world([0.05, -0.05, 0.12],
-                                                            p.getQuaternionFromEuler([0, 0, PI/2]))
+                                                            p.getQuaternionFromEuler([0, 0, PI/2],physicsClientId=self.physics_client))
         self.board.reset_position_and_orientation(position=pos,
                                                   orientation=ori)
 
@@ -143,8 +138,8 @@ class SimulationEnvironment:
         # 设置机械臂-物理相机的tcp坐标
         for _ in range(100):
             self.step_simulation()
-        ee_pos, ee_orn = p.getLinkState(robot_id, 6)[4:6]
-        tcp_pos, tcp_orn = p.getLinkState(self.camera.id_robot, 3)[4:6]  # RGB_Link
+        ee_pos, ee_orn = p.getLinkState(robot_id, 6,physicsClientId=self.physics_client)[4:6]
+        tcp_pos, tcp_orn = p.getLinkState(self.camera.id_robot, 3,physicsClientId=self.physics_client)[4:6]  # RGB_Link
         tcp_in_ee_matrix = self.robot_list[0].TAB_with_AinW_and_BinW(tcp_pos, tcp_orn, ee_pos, ee_orn)
         self.robot_list[0].add_tcp("RGB_camera", tcp_in_ee_matrix)
 
@@ -169,27 +164,27 @@ class SimulationEnvironment:
 
     def step_simulation(self):
         """ 进行仿真步进 """
-        p.stepSimulation()
+        p.stepSimulation(physicsClientId=self.physics_client)
 
     def show_axis(self, ifshow=True):
         """显示坐标轴"""
         axis_length = 2.0
         if self.base_axis:
             for line_id in self.base_axis:
-                p.removeUserDebugItem(line_id)
+                p.removeUserDebugItem(line_id,physicsClientId=self.physics_client)
             self.base_axis = []
         if not ifshow:
             return
          # X轴红色，Y轴绿色，Z轴蓝色
 
-        x = p.addUserDebugLine([0, 0, 0], [axis_length, 0, 0], [1, 0, 0], lineWidth=2, lifeTime=0)
-        y = p.addUserDebugLine([0, 0, 0], [0, axis_length, 0], [0, 1, 0], lineWidth=2, lifeTime=0)
-        z = p.addUserDebugLine([0, 0, 0], [0, 0, axis_length], [0, 0, 1], lineWidth=2, lifeTime=0)
+        x = p.addUserDebugLine([0, 0, 0], [axis_length, 0, 0], [1, 0, 0], lineWidth=2, lifeTime=0,physicsClientId=self.physics_client)
+        y = p.addUserDebugLine([0, 0, 0], [0, axis_length, 0], [0, 1, 0], lineWidth=2, lifeTime=0,physicsClientId=self.physics_client)
+        z = p.addUserDebugLine([0, 0, 0], [0, 0, axis_length], [0, 0, 1], lineWidth=2, lifeTime=0,physicsClientId=self.physics_client)
         self.base_axis = [x, y, z]
 
     def clear_obstacles(self):
         for obstacle in self.obstacles:
-            p.removeBody(obstacle)
+            p.removeBody(obstacle,physicsClientId=self.physics_client)
 
     def add_object(self, urdf_path,  basePosition,baseOrientation,useFixedBase):
         """ 向仿真环境添加物体 """
@@ -197,7 +192,7 @@ class SimulationEnvironment:
             basePosition = [0, 0, 0]
         if baseOrientation is None:
             baseOrientation = [0, 0, 0, 1]
-        obj_id = p.loadURDF(urdf_path, basePosition=basePosition, baseOrientation=baseOrientation,useFixedBase=useFixedBase)
+        obj_id = p.loadURDF(urdf_path, basePosition=basePosition, baseOrientation=baseOrientation,useFixedBase=useFixedBase,physicsClientId=self.physics_client)
         self.obstacles.append(obj_id)
         return obj_id
 
@@ -250,6 +245,7 @@ class SimulationEnvironment:
                                                             jointRanges=joint_ranges,
                                                             maxNumIterations=100,
                                                             # currentPositions=currentPosition,
+                                                           physicsClientId=self.physics_client
                                                             )
         except Exception as e:
             print(e)
@@ -258,7 +254,8 @@ class SimulationEnvironment:
         try:
             for i in range(min(len(joint_positions), robot.num_avail_joints)):
                 p.setJointMotorControl2(
-                    robot.id_robot, robot.ids_avail_joints[i], p.POSITION_CONTROL,maxVelocity=maxVelocity, targetPosition=joint_positions[i]
+                    robot.id_robot, robot.ids_avail_joints[i], p.POSITION_CONTROL,maxVelocity=maxVelocity, targetPosition=joint_positions[i],
+                    physicsClientId=self.physics_client
                 )
         except Exception as e:
             print(e)
@@ -280,7 +277,7 @@ class SimulationEnvironment:
                 robot_id, robot.ids_avail_joints[i],
                 p.POSITION_CONTROL, targetPosition=joint_positions[i],force=1000,
                 targetVelocity=0, maxVelocity=2,
-                positionGain=0.4, velocityGain=0.8,
+                positionGain=0.4, velocityGain=0.8,physicsClientId=self.physics_client
             )
         return "Robot moved successfully"
     def set_robot(self, robot_id,joint_positions):
@@ -291,7 +288,8 @@ class SimulationEnvironment:
         robot = [robot for robot in self.robot_list if robot.id_robot == robot_id][0]
         for i in range(min(len(joint_positions), robot.num_avail_joints)):
             p.resetJointState(
-                robot_id, robot.ids_avail_joints[i], targetValue=joint_positions[i]
+                robot_id, robot.ids_avail_joints[i], targetValue=joint_positions[i],
+                physicsClientId=self.physics_client
             )
         return "Robot moved successfully"
 
@@ -312,14 +310,16 @@ class SimulationEnvironment:
         # 创建碰撞形状
         collision_shape = p.createCollisionShape(
             shapeType=p.GEOM_BOX,
-            halfExtents=half_extents
+            halfExtents=half_extents,
+            physicsClientId=self.physics_client
         )
 
         # 创建视觉形状
         visual_shape = p.createVisualShape(
             shapeType=p.GEOM_BOX,
             halfExtents=half_extents,
-            rgbaColor=color
+            rgbaColor=color,
+            physicsClientId=self.physics_client
         )
 
         # 创建多体对象（立方体）
@@ -329,6 +329,7 @@ class SimulationEnvironment:
             baseVisualShapeIndex=visual_shape,
             basePosition=position,
             baseOrientation=orientation,
+            physicsClientId=self.physics_client
         )
         self.object_list.append(cube_id)
 
@@ -341,7 +342,7 @@ class SimulationEnvironment:
         :param object_id: 物体的 ID
         :return: 物体的位置，格式为 [x, y, z]
         """
-        position, ori = p.getBasePositionAndOrientation(object_id)
+        position, ori = p.getBasePositionAndOrientation(object_id,physicsClientId=self.physics_client)
         return position,ori
 
     def ninePoints_sample(self,center_joints):
@@ -506,15 +507,16 @@ class SimulationEnvironment:
                                                parentFramePosition=robot_end_in_mass_sys,
                                                childFramePosition=camera_in_mass_sys,
                                                childFrameOrientation=ori_in_cam_base_link,
+                                               physicsClientId=self.physics_client
                                                )
 
-            p.changeConstraint(constraint_id, maxForce=1e6, )
+            p.changeConstraint(constraint_id, maxForce=1e6,physicsClientId=self.physics_client )
             # # p.changeConstraint(constraint_id,  erp=0.2)
             for i in range(camera.id_end_effector + 1):
                 p.setCollisionFilterPair(camera.id_robot, robot.id_robot, i, robot.id_end_effector,
                                          0,
                                          physicsClientId=self.physics_client)
-                p.changeDynamics(camera.id_robot, i, mass=0.00001)
+                p.changeDynamics(camera.id_robot, i, mass=0.00001,physicsClientId=self.physics_client)
             for i in range(robot.num_all_joints + 1):
                 p.setCollisionFilterPair(camera.id_robot, robot.id_robot, -1, i,
                                          0,
@@ -524,7 +526,7 @@ class SimulationEnvironment:
                                      0,
                                      physicsClientId=self.physics_client)
             #
-            p.changeDynamics(camera.id_robot, -1, mass=0.001)
+            p.changeDynamics(camera.id_robot, -1, mass=0.001,physicsClientId=self.physics_client)
             self.camera_constraint = constraint_id
         pass
 
@@ -593,12 +595,12 @@ class SimulationEnvironment:
     def reset_simulation(self):
         """重置仿真"""
         self.stop_simulation()
-        p.resetSimulation()
+        p.resetSimulation(physicsClientId=self.physics_client)
         self.objects = {}
         self.robots = {}
         self.simulation_time = 0.0
         # 重新添加地面
-        self.ground_id = p.loadURDF("plane.urdf")
+        self.ground_id = p.loadURDF("plane.urdf",physicsClientId=self.physics_client)
 
 
     def _simulation_loop(self):
@@ -609,7 +611,7 @@ class SimulationEnvironment:
 
     def _step_simulation(self):
         """执行一步仿真"""
-        p.stepSimulation()
+        p.stepSimulation(physicsClientId=self.physics_client)
         # 创建字典副本来避免在迭代时修改字典
         callbacks_copy = list(self.simulation_callbacks.values())
         # 执行所有注册的回调函数（热插入的自定义操作）
@@ -639,7 +641,7 @@ class SimulationEnvironment:
 
     def remove_all_DebugItems(self):
         """移除所有调试项"""
-        p.removeAllUserDebugItems()
+        p.removeAllUserDebugItems(physicsClientId=self.physics_client)
 
 
 def test_ompl():

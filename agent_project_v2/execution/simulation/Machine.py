@@ -33,12 +33,12 @@ class Machine(Robot):
 
 
     def get_link_info(self, ifshow=True):
-        num_joints = p.getNumJoints(self.id_robot)
+        num_joints = p.getNumJoints(self.id_robot,physicsClientId=self.id_client)
 
         # 遍历所有关节
         for joint_index in range(num_joints):
             # 获取关节信息
-            joint_info = p.getJointInfo(self.id_robot, joint_index)
+            joint_info = p.getJointInfo(self.id_robot, joint_index,physicsClientId=self.id_client)
 
             # 获取关联的link名称和ID
             link_name = joint_info[12].decode('UTF-8')  # link名称
@@ -120,11 +120,11 @@ class Machine(Robot):
         """
         self.workpiece_pose = position
         # 将欧拉角转换为四元数
-        quaternion = p.getQuaternionFromEuler(orientation)
+        quaternion = p.getQuaternionFromEuler(orientation,physicsClientId=self.id_client)
         self.workpiece_orientation = quaternion
 
         # 获取C轴的世界坐标系下的位置和姿态
-        c_axis_state = p.getLinkState(self.id_robot, self.turntable_index)
+        c_axis_state = p.getLinkState(self.id_robot, self.turntable_index,physicsClientId=self.id_client)
         c_axis_pos, c_axis_ori = c_axis_state[4], c_axis_state[5]
 
         # 将工件的位置和姿态转换为相对于世界坐标系的位置和姿态
@@ -138,14 +138,14 @@ class Machine(Robot):
         workpiece_id = self.workpiece.id_robot
         # workpiece_id = p.loadURDF(workpiece_urdf_path, world_position, world_orientation, useFixedBase=False,physicsClientId=self.id_client)
 
-        p.setCollisionFilterPair(self.id_robot, workpiece_id, 1, -1, 0)
-        p.setCollisionFilterPair(self.id_robot, workpiece_id, -1, -1, 0)
-        p.setCollisionFilterPair(self.id_robot, workpiece_id, 0, -1, 0)
-        p.setCollisionFilterPair(self.id_robot, workpiece_id, 5, -1, 0)
-        p.setCollisionFilterPair(self.id_robot, workpiece_id, 4, -1, 0)
+        p.setCollisionFilterPair(self.id_robot, workpiece_id, 1, -1, 0,physicsClientId=self.id_client)
+        p.setCollisionFilterPair(self.id_robot, workpiece_id, -1, -1, 0,physicsClientId=self.id_client)
+        p.setCollisionFilterPair(self.id_robot, workpiece_id, 0, -1, 0,physicsClientId=self.id_client)
+        p.setCollisionFilterPair(self.id_robot, workpiece_id, 5, -1, 0,physicsClientId=self.id_client)
+        p.setCollisionFilterPair(self.id_robot, workpiece_id, 4, -1, 0,physicsClientId=self.id_client)
         # 获取父link的质心坐标
-        parentFramePosition = self.get_com_in_link_frame(self.id_robot, self.turntable_index)
-        childFramePosition = self.get_com_in_link_frame(workpiece_id, -1,baseFramePosition=world_position)
+        parentFramePosition = self.get_com_in_link_frame(self.id_robot, self.turntable_index,physicsClientId=self.id_client)
+        childFramePosition = self.get_com_in_link_frame(workpiece_id, -1,baseFramePosition=world_position,physicsClientId=self.id_client)
         childFrameOrientation = invert_quaternion(self.workpiece_orientation)
 
         # 将工件固定在C轴上
@@ -161,12 +161,13 @@ class Machine(Robot):
                            parentFrameOrientation=c_axis_ori,
                            # childFrameOrientation=p.getQuaternionFromEuler((0, 0, 0)),
                            childFrameOrientation=childFrameOrientation ,
+                                                      physicsClientId=self.id_client,
                            )
         self.id_workpiece = workpiece_id
         self.post_processor = self.PostProcessor(self)
 
         for _ in range(100):
-            p.stepSimulation()
+            p.stepSimulation(physicsClientId=self.id_client)
 
         # 获取关节信息
 
@@ -1028,7 +1029,7 @@ class Machine(Robot):
         # 初始化关节范围字典
         self.dynamic_joint_ranges = {i: (None, None) for i in range(self.num_all_joints)}
         for i in range(self.num_all_joints):
-            joint_info = p.getJointInfo(self.id_robot, i)
+            joint_info = p.getJointInfo(self.id_robot, i,physicsClientId=self.id_client)
             self.dynamic_joint_ranges[i] = (joint_info[8], joint_info[9])
         for i in range(min(self.num_all_joints,len(joint_ranges))):
             min_range, max_range = joint_ranges[i]

@@ -7,4 +7,11 @@
     <orderEntry type="jdk" jdkName="pybullet-py3.10" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
+  <component name="PyNamespacePackagesService">
+    <option name="namespacePackageFolders">
+      <list>
+        <option value="$MODULE_DIR$/agent_project_v2/execution/physical" />
+      </list>
+    </option>
+  </component>
 </module>

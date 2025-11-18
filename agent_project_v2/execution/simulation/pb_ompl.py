@@ -44,7 +44,7 @@ class PbOMPLRobot(Robot):
 
 
     def _is_not_fixed(self, joint_idx):
-        joint_info = p.getJointInfo(self.id_robot, joint_idx)
+        joint_info = p.getJointInfo(self.id_robot, joint_idx,physicsClientId=self.id_client)
         return joint_info[2] != p.JOINT_FIXED
 
     def get_joint_bounds(self):
@@ -61,7 +61,7 @@ class PbOMPLRobot(Robot):
         # print("Joint bounds: {}".format(self.joint_bounds))
 
         for i, joint_id in enumerate(self.ids_avail_joints):
-            joint_info = p.getJointInfo(self.id_robot, joint_id)
+            joint_info = p.getJointInfo(self.id_robot, joint_id,physicsClientId=self.id_client)
             low = joint_info[8]  # low bounds
             high = joint_info[9] # high bounds
             if low < high:
@@ -99,7 +99,7 @@ class PbOMPLRobot(Robot):
 
     def _set_joint_positions(self, joints, positions):
         for joint, value in zip(joints, positions):
-            p.resetJointState(self.id_robot, joint, value, targetVelocity=0)
+            p.resetJointState(self.id_robot, joint, value, targetVelocity=0,physicsClientId=self.id_client)
 
 class PbStateSpace(ob.RealVectorStateSpace):
     def __init__(self, num_dim) -> None:
@@ -174,22 +174,22 @@ class PbOMPL():
         # check self-collision
         self.robot.set_state(self.state_to_list(state))
         for link1, link2 in self.check_link_pairs:
-            if utils.pairwise_link_collision(self.robot_id, link1, self.robot_id, link2):
+            if utils.pairwise_link_collision(self.robot_id, link1, self.robot_id, link2,physicsClientId=self.robot.id_client):
                 # print(get_body_name(body), get_link_name(body, link1), get_link_name(body, link2))
                 return False
 
         # check collision against environment
         for body1, body2 in self.check_body_pairs:
-            if utils.pairwise_collision(body1, body2):
+            if utils.pairwise_collision(body1, body2,physicsClientId=self.robot.id_client):
                 # print('body collision', body1, body2)
                 # print(get_body_name(body1), get_body_name(body2))
                 return False
         return True
 
     def setup_collision_detection(self, robot:PbOMPLRobot, obstacles, self_collisions = True, allow_collision_links = []):
-        self.check_link_pairs = utils.get_self_link_pairs(robot.id_robot, robot.ids_avail_joints) if self_collisions else []
+        self.check_link_pairs = utils.get_self_link_pairs(robot.id_robot, robot.ids_avail_joints,physicsClientId=self.robot.id_client) if self_collisions else []
         moving_links = frozenset(
-            [item for item in utils.get_moving_links(robot.id_robot, robot.ids_avail_joints) if not item in allow_collision_links])
+            [item for item in utils.get_moving_links(robot.id_robot, robot.ids_avail_joints,physicsClientId=self.robot.id_client) if not item in allow_collision_links])
         moving_bodies = [(robot.id_robot, moving_links)]
         self.check_body_pairs = list(product(moving_bodies, obstacles))
 
@@ -286,11 +286,12 @@ class PbOMPL():
                     p.setJointMotorControl2(self.robot.id_robot, i, p.POSITION_CONTROL, q[i],force=10000 * 240.,
                                     positionGain = 0.5,  # KP
                                     velocityGain = 1.5,  # KD
+                                            physicsClientId=self.robot.id_client
 
                                             )
             else:
                 self.robot.set_state(q)
-            p.stepSimulation()
+            p.stepSimulation(physicsClientId=self.robot.id_client)
             time.sleep(1/240.)
 
 
