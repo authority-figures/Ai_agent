@@ -45,7 +45,7 @@ class SimulationEnvironment:
         # 重置仿真环境
         if self.physics_client is not None:
             p.disconnect()
-        self.physics_client = p.connect(p.GUI, options=self.options)  # GUI 模式
+        self.physics_client = p.connect(p.GUI_SERVER, key=1234, options=self.options)  # GUI 模式
         p.configureDebugVisualizer(p.COV_ENABLE_SHADOWS, 1, shadowMapWorldSize=1, shadowMapIntensity=1,
                                    physicsClientId=self.physics_client)
         p.configureDebugVisualizer(p.COV_ENABLE_GUI,0, physicsClientId=self.physics_client) # 关闭GUI信息展示

@@ -25,6 +25,11 @@ class Jakamini2Driver(RobotInterface):
         self.calibration_data = {}
         self.physics_client = None
 
+        # 创建查询机械臂状态的轮询任务
+        self._status_task: asyncio.Task | None = None
+        self._status_interval = 0.01  # 轮询周期，单位秒
+        self._last_status = None  # 可选：缓存最近一次状态
+
 
 
     def init_sim(self):
@@ -46,10 +51,10 @@ class Jakamini2Driver(RobotInterface):
             ret = await asyncio.to_thread(self.robot.login)
             if ret[0] == 0:
                 self.connected = True
-                return (ret[0],ret[1])
+                return (ret[0],"connect success")
             else:
-                print(f"[Jakamini2Driver:connect] Failed to connect: {ret[1]}")
-                return (ret[0],ret[1])
+                print(f"[Jakamini2Driver:connect] Failed to connect: {ip}")
+                return (ret[0],"Failed to connect")
         except Exception as e:
             print(f"[Jakamini2Driver:connect] Exception: {e}")
             return (-1, str(e))
@@ -61,10 +66,10 @@ class Jakamini2Driver(RobotInterface):
             ret = await asyncio.to_thread(self.robot.logout)
             if ret[0] == 0:
                 self.connected = False
-                return (ret[0],ret[1])
+                return (ret[0],"disconnect success")
             else:
                 print(f"[Jakamini2Driver:disconnect] Failed to disconnect: {ret[1]}")
-                return (ret[0],ret[1])
+                return (ret[0],"disconnect failed")
         except Exception as e:
             print(f"[Jakamini2Driver:disconnect] Exception: {e}")
             return (-1, str(e))
@@ -121,6 +126,88 @@ class Jakamini2Driver(RobotInterface):
         except Exception as e:
             print(f"[Jakamini2Driver:get_joint_pos] Exception: {e}")
             return None
+
+    async def get_robotstatus(self):
+        '''
+        成功：(0, robotstatus)，robotstatus的长度为24，robotstatus返回数据顺序如下所示:
+            errcode 机器人运行出错时错误编号，0为运行正常，其它为异常
+            inpos 机器人运动是否到位标志，0为没有到位，1为运动到位
+            powered_on 机器人是否上电标志，0为没有上电，1为上电
+            enabled 机器人是否使能标志，0为没有使能，1为使能
+            rapidrate 机器人运行倍率
+            protective_stop 机器人是否检测到碰撞，0为没有检测到碰撞，1则相反
+            drag_status机器人是否处于拖拽状态，0为没有处于拖拽状态，1则相反
+            on_soft_limit 机器人是否处于限位，0为没有触发限位保护，1为触发限位保护
+            current_user_id 机器人目前使用的用户坐标系id
+            current_tool_id 机器人目前使用的工具坐标系id
+            dout 机器人控制柜数字输出信号
+            din 机器人控制柜数字输入信号
+            aout 机器人控制柜模拟输出信号
+            ain 机器人控制柜模拟输入信号
+            tio_dout 机器人末端工具数字输出信号
+            tio_din 机器人末端工具数字输入信号
+            tio_ain 机器人末端工具模拟输入信号
+            extio 机器人外部扩展模块IO信号
+            cart_position 机器人末端的笛卡尔空间位置值
+            joint_position 机器人关节空间位置
+            robot_monitor_data 机器人状态监测数据（scb主版本号、scb小版本号、控制器温度、机器人平均电压、机器人平均电流、机器人6个关节的监测数据（瞬时电流、瞬时电压、瞬时温度））
+            torq_sensor_monitor_data 机器人力矩传感器状态监测数据（力矩传感器ip地址、力矩传感器端口号、工具负载（负载质量、质心x轴坐标、质心y轴坐标、质心z轴坐标）、力矩传感器状态、力矩传感器异常错误码、6个力矩传感器实际接触力值、6个力矩传感器原始读数值、6个力矩传感器实际接触力值（不随初始化选项变化））
+            is_socket_connect sdk与控制器连接通道是否正常，0为连接通道异常，1为连接通道正常
+            emergency_stop 机器人是否急停，0为没有按下急停，1则相反
+            tio_key 机器人末端工具按钮 [0]free；[1]point；[2]末端灯光按钮
+            失败：其它
+        :return:
+        '''
+        try:
+            if not self.robot:
+                return (-1, "Robot not connected")
+            ret = await asyncio.to_thread(self.robot.get_robot_status)
+            return ret
+        except Exception as e:
+            print(f"[Jakamini2Driver:get_robotstatus] Exception: {e}")
+            return (-1, str(e))
+
+
+    async def _status_loop(self):
+        """后台协程：持续轮询机器人状态"""
+        try:
+            while self.connected:
+                ret = await self.get_robotstatus()
+                # ret 具体是什么结构看 jkrc 返回，这里假设 ret[0] 为错误码
+                if ret[0] == 0:
+                    status = ret[1]
+                    self._last_status = status
+                    # TODO: 在这里做你想做的事，比如发布到 event_bus / 更新 DT
+                    # event_bus.publish("robot_status_updated", {...})
+                else:
+                    print(f"[Jakamini2Driver:status_loop] get_robotstatus failed: {ret}")
+                await asyncio.sleep(self._status_interval)
+        except asyncio.CancelledError:
+            # 任务被取消时的收尾处理
+            print("[Jakamini2Driver:status_loop] cancelled")
+        except Exception as e:
+            print(f"[Jakamini2Driver:status_loop] Exception: {e}")
+
+    def start_status_monitor(self, interval: float = 0.1):
+        """在当前事件循环中启动状态监控任务"""
+        self._status_interval = interval
+        if self._status_task is not None and not self._status_task.done():
+            return  # 已经在跑了
+
+        loop = asyncio.get_running_loop()
+        self._status_task = loop.create_task(self._status_loop())
+
+    async def stop_status_monitor(self):
+        """停止状态监控任务"""
+        if self._status_task is not None:
+            self._status_task.cancel()
+            try:
+                await self._status_task
+            except asyncio.CancelledError:
+                pass
+            self._status_task = None
+
+
 
     async def joint_move(self, joint_positions,move_mode=0, speed=1, acc=1,is_block=True,tol=0.0):
         """

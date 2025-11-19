@@ -8,6 +8,8 @@ from fastapi import FastAPI,Request
 from pydantic import BaseModel
 from execution.physical.drivers.jakamini2.driver import *
 from core.physical_request import *
+from typing import Optional, Dict, Any
+from fastapi import WebSocket, WebSocketDisconnect
 
 # 创建 FastAPI 服务器
 app = FastAPI(title="Physical System API", version="0.1.0")
@@ -16,6 +18,47 @@ physical_driver = Jakamini2Driver('192.168.100.20')
 physical_driver.init_sim()
 print("physical_driver physicsClientId:", physical_driver.physics_client)
 # physical_driver = None
+
+
+
+@app.websocket("/ws/robot_status")
+async def websocket_robot_status(ws: WebSocket):
+    await ws.accept()
+    print("[ws] client connected")
+
+    # 用于检测状态变化，避免重复发送
+    last_sent = None
+
+    try:
+        while True:
+            # 如果还没连接机器人，可以发一个提示或空状态
+            if not physical_driver.connected or physical_driver._last_status is None:
+                await ws.send_json({
+                    "status": "no_data",
+                    "message": "Robot not connected or no status yet"
+                })
+                await asyncio.sleep(0.5)
+                continue
+
+            current = physical_driver._last_status
+
+            # 这里简单做一下“变化检测”，也可以直接每隔 100ms 发一次 current
+            if current != last_sent:
+                await ws.send_json({
+                    "status": "ok",
+                    "data": current,
+                })
+                last_sent = current
+
+            await asyncio.sleep(0.01)  # 推送频率
+
+    except WebSocketDisconnect:
+        print("[ws] client disconnected")
+    except Exception as e:
+        print(f"[ws] Error in websocket_robot_status: {e}")
+
+
+
 @app.post("/connect")
 async def connect(request:Request):
     """ API: 启动仿真环境 """
@@ -125,6 +168,43 @@ async def joint_move(request:JointMoveRequest):
     except Exception as e:
         print("[execution:physical:api:joint_move] Error joint_move:", e)
         return {"status": "error", "message": str(e)}
+
+
+
+@app.post("/start_subscribe")
+async def start_subscribe():
+    """ API: 启动仿真环境 """
+    try:
+        if physical_driver.connected:
+            physical_driver.start_status_monitor()
+            return {"status": "success"}
+        else:
+            print("[execution:physical:api:start_subscribe] Robot not connected.")
+            return {"status": "failed", "message": []}
+    except Exception as e:
+        print("[execution:physical:api:get_joint_pos] Error get_joint_pos:", e)
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/stop_subscribe")
+async def stop_subscribe():
+    """ API: 停止订阅，停止监听机器人状态 """
+    try:
+        # 停止状态轮询任务
+        await physical_driver.stop_status_monitor()
+        return {"status": "success"}
+    except Exception as e:
+        print("[execution:physical:api:stop_subscribe] Error:", e)
+        return {"status": "error", "message": str(e)}
+
+
+
+
+
+
+
+
+
 
 
 def run_physical_executor_service():

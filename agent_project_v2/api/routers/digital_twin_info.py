@@ -1,24 +1,54 @@
 # run_pybullet_service.py
 import asyncio
-
+import json
 import uvicorn
 import numpy as np
 from fastapi import FastAPI,Request
 from execution.simulation.environment import SimulationEnvironment
+from execution.digital_twin.digital_twin_env import DigitalTwinEnv
 from execution.simulation.models import *
 from core.simulation_request import *
+import websockets
+
+
 
 # 创建 FastAPI 服务器
 app = FastAPI()
-sim_env = SimulationEnvironment(options="MyPyBulletSimulation_")
-# sim_env.initialize()  # 不能提前启动
-print("sim_env physicsClientId:", sim_env.physics_client)
+DT_env = DigitalTwinEnv(options="MyPyBulletSimulation_")
+# DT_env.initialize()
+print("DT_env physicsClientId:", DT_env.physics_client)
+
+
+async def listen_for_robot_status():
+    # 用于监听来自机械臂的状态，并将状态设置到DT环境的机械臂当中
+    uri = "ws://127.0.0.1:8002/ws/robot_status"
+    async with websockets.connect(uri) as ws:
+        while True:
+            msg = await ws.recv()
+            data = json.loads(msg)
+            # 将数据存储到 DigitalTwinEnv 中的 _last_robot_status
+            if data["status"] == "ok":
+                # 假设数据格式为 {'joint_positions': [...] }
+                DT_env._last_robot_status = data["data"]
+
+
+# 启动监听任务
+@app.post("/start_listening_robot_status")
+async def start_listening_robot_status():
+    """ API: 启动监听机械臂状态 """
+    try:
+        await asyncio.create_task(listen_for_robot_status())
+        return {"status": "success"}
+    except Exception as e:
+        print("[execution:simulation:api:start_listening_robot_status] Error starting listening:", e)
+        return {"status": "error", "message": str(e)}
+
 
 @app.post("/start_simulation")
 async def start_simulation():
     """ API: 启动仿真环境 """
     try:
-        sim_env.start_simulation()
+        DT_env.start_simulation()
         return {"status": "success"}
     except Exception as e:
         print("[execution:simulation:api:start_simulation] Error starting simulation:", e)
@@ -29,7 +59,7 @@ async def start_simulation():
 async def stop_simulation():
     """ API: 停止仿真环境 """
     try:
-        sim_env.stop_simulation()
+        DT_env.stop_simulation()
         return {"status": "success"}
     except Exception as e:
         print("[execution:simulation:api:stop_simulation] Error stopping simulation:", e)
@@ -39,14 +69,14 @@ async def stop_simulation():
 @app.post("/init_env")
 async def init_env():
     """ API: 向仿真环境添加物体 """
-    sim_env.initialize()
+    DT_env.initialize()
     return {"status": "success"}
 
 @app.post("/load_scene")
 async def load_scene():
     """ API: 向仿真环境添加物体 """
     try:
-        sim_env.load_scene()
+        DT_env.load_scene()
         return {"status": "success"}
     except Exception as e:
         print("[execution:simulation:api:load_scene] Error loading scene:", e)
@@ -60,7 +90,7 @@ async def show_axis(request: dict):
     """ API: 向仿真环境添加物体 """
     try:
         ifshow = request.get("ifshow", True)
-        sim_env.show_axis(ifshow=ifshow)
+        DT_env.show_axis(ifshow=ifshow)
         return {"status": "success"}
     except Exception as e:
         print("[execution:simulation:api:show_axis] Error showing axis:", e)
@@ -71,7 +101,7 @@ async def show_axis(request: dict):
 async def clear_env():
     """ API: 清理仿真环境中的物体 """
     try:
-        sim_env.clear_env()
+        DT_env.clear_env()
         return {"status": "success"}
     except Exception as e:
         print("[execution:simulation:api:clear_env] Error clearing environment:", e)
@@ -80,13 +110,13 @@ async def clear_env():
 @app.post("/add_object")
 async def add_object(request: LoadObjectRequest):
     """ API: 向仿真环境添加物体 """
-    obj_id = sim_env.add_object(request.urdf_path, request.basePosition,request.baseOrientation,request.useFixedBase)
+    obj_id = DT_env.add_object(request.urdf_path, request.basePosition,request.baseOrientation,request.useFixedBase)
     return {"status": "success", "object_id": obj_id}
 
 @app.post("/load_robot")
 async def load_robot(request: LoadObjectRequest):
     """ API: 加载机械臂 """
-    robot_id = sim_env.load_robot(request.urdf_path, request.basePosition,request.baseOrientation,request.useFixedBase)
+    robot_id = DT_env.load_robot(request.urdf_path, request.basePosition,request.baseOrientation,request.useFixedBase)
     return {"status": "success", "robot_id": robot_id}
 
 
@@ -96,7 +126,7 @@ async def load_robot(request: LoadObjectRequest):
 async def get_object_pos_and_ori(request: GetIDRequest):
     """ API: 获取机械臂末端位置 """
     try:
-        pos,ori = sim_env.get_object_pos_and_ori(request.robot_id)
+        pos,ori = DT_env.get_object_pos_and_ori(request.robot_id)
         return {"status": "success", "end_pos": pos, "end_ori": ori}
     except Exception as e:
         print("[execution:simulation:api:get_object_pos_and_ori] Error getting object pos and ori:", e)
@@ -108,36 +138,36 @@ async def get_object_pos_and_ori(request: GetIDRequest):
 async def move_robot_to_target(request: PosMoveRequest):
     """ API: 让机械臂运动 """
     try:
-        if len(sim_env.robot_list) == 0:
+        if len(DT_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
-        robot_id = sim_env.robot_list[0].id_robot
+        robot_id = DT_env.robot_list[0].id_robot
 
         if request.reference_frame == "body":
-            pre_inverse_mode = sim_env.robot_list[0].inverse_mode
-            sim_env.robot_list[0].inverse_mode = "body_sys"
-            joints_value = sim_env.robot_list[0].get_state_from_ik(request.target_position,request.target_orientation,tcp_name=None)
-            sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
-            sim_env.robot_list[0].inverse_mode = pre_inverse_mode
+            pre_inverse_mode = DT_env.robot_list[0].inverse_mode
+            DT_env.robot_list[0].inverse_mode = "body_sys"
+            joints_value = DT_env.robot_list[0].get_state_from_ik(request.target_position,request.target_orientation,tcp_name=None)
+            DT_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
+            DT_env.robot_list[0].inverse_mode = pre_inverse_mode
         elif request.reference_frame == "world":
-            # response = sim_env.move_robot_to_target(robot_id,request.target_position,request.target_orientation,request.maxVelocity)
-            pre_inverse_mode = sim_env.robot_list[0].inverse_mode
-            sim_env.robot_list[0].inverse_mode = "world_sys"
-            joints_value = sim_env.robot_list[0].get_state_from_ik(request.target_position, request.target_orientation,
+            # response = DT_env.move_robot_to_target(robot_id,request.target_position,request.target_orientation,request.maxVelocity)
+            pre_inverse_mode = DT_env.robot_list[0].inverse_mode
+            DT_env.robot_list[0].inverse_mode = "world_sys"
+            joints_value = DT_env.robot_list[0].get_state_from_ik(request.target_position, request.target_orientation,
                                                                    tcp_name=None)
-            sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
-            sim_env.robot_list[0].inverse_mode = pre_inverse_mode
+            DT_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
+            DT_env.robot_list[0].inverse_mode = pre_inverse_mode
         elif request.reference_frame == "CNC_C":
-            T_world2robot = sim_env.rm_sys.T_robot2world.copy()
-            T_c2world = sim_env.robot_list[0].pos_to_matrix([0,0,-sim_env.machine.C_in_sys0],[0,0,0,1])
-            T_c2target = sim_env.robot_list[0].pos_to_matrix(request.target_position,request.target_orientation)
+            T_world2robot = DT_env.rm_sys.T_robot2world.copy()
+            T_c2world = DT_env.robot_list[0].pos_to_matrix([0,0,-DT_env.machine.C_in_sys0],[0,0,0,1])
+            T_c2target = DT_env.robot_list[0].pos_to_matrix(request.target_position,request.target_orientation)
             T_robot2target = np.linalg.inv(T_world2robot) @ np.linalg.inv(T_c2world) @ T_c2target
-            pos, ori = sim_env.robot_list[0].matrix_to_pos(T_robot2target)
-            pre_inverse_mode = sim_env.robot_list[0].inverse_mode
-            sim_env.robot_list[0].inverse_mode = "body_sys"
-            joints_value = sim_env.robot_list[0].get_state_from_ik(pos, ori,
+            pos, ori = DT_env.robot_list[0].matrix_to_pos(T_robot2target)
+            pre_inverse_mode = DT_env.robot_list[0].inverse_mode
+            DT_env.robot_list[0].inverse_mode = "body_sys"
+            joints_value = DT_env.robot_list[0].get_state_from_ik(pos, ori,
                                                                    tcp_name=None)
-            sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
-            sim_env.robot_list[0].inverse_mode = pre_inverse_mode
+            DT_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
+            DT_env.robot_list[0].inverse_mode = pre_inverse_mode
         else:
             return {"status": "error", "message": "No reference frame matched"}
 
@@ -151,13 +181,13 @@ async def move_robot_to_target(request: PosMoveRequest):
 @app.post("/create_cube")
 async def create_cube(request: CreateCubeRequest):
     """ API: 创建立方体 """
-    cube_id = sim_env.create_cube(request.pos, request.ori, request.half_extents, request.mass, request.color)
+    cube_id = DT_env.create_cube(request.pos, request.ori, request.half_extents, request.mass, request.color)
     return {"status": "success", "cube_id": cube_id}
 
 @app.post("/get_object_pos_and_ori")
 async def get_object_pos_and_ori(request: GetIDRequest):
     """ API: 获取物体位置和朝向 """
-    pos, ori = sim_env.get_object_pos_and_ori(request.robot_id)
+    pos, ori = DT_env.get_object_pos_and_ori(request.robot_id)
     return {"status": "success", "pos": pos, "ori": ori}
 
 
@@ -166,23 +196,23 @@ async def show_tcp_axis(request: dict):
     """ API: 向仿真环境添加物体 """
     try:
         ifshow = request.get("ifshow", True)
-        if len(sim_env.robot_list) == 0:
+        if len(DT_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
 
         # 定义回调函数
         def show_tcp():
-            sim_env.robot_list[0].show_link_sys(linkIndex=10, lifetime=-1, type=1, name="tcp")
+            DT_env.robot_list[0].show_link_sys(linkIndex=10, lifetime=-1, type=1, name="tcp")
 
         # 唯一标识符
         callback_id = "show_tcp"
 
         # 动态添加或移除回调
         if ifshow:
-            sim_env.add_simulation_callback(show_tcp, callback_id)
+            DT_env.add_simulation_callback(show_tcp, callback_id)
         else:
-            sim_env.remove_all_DebugItems()
+            DT_env.remove_all_DebugItems()
 
-            sim_env.remove_simulation_callback(callback_id)
+            DT_env.remove_simulation_callback(callback_id)
 
         return {"status": "success"}
     except Exception as e:
@@ -193,19 +223,19 @@ async def show_tcp_axis(request: dict):
 async def get_robot_end_pos_and_ori(request: GetPosOriRequest):
     """ API: 获取机械臂末端位置 """
     try:
-        if len(sim_env.robot_list) == 0:
+        if len(DT_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
         if request.reference_frame == "body":
-            pos, ori = sim_env.robot_list[0].get_pos_ori_from_ik(tcp_name=None)
+            pos, ori = DT_env.robot_list[0].get_pos_ori_from_ik(tcp_name=None)
         elif request.reference_frame == "world":
-            pos, ori = sim_env.robot_list[0].show_link_sys(5,0.1,1)
-            # pos, ori = sim_env.get_robot_end_pos_and_ori(sim_env.robot_list[0].id_robot)
+            pos, ori = DT_env.robot_list[0].show_link_sys(5,0.1,1)
+            # pos, ori = DT_env.get_robot_end_pos_and_ori(DT_env.robot_list[0].id_robot)
         elif request.reference_frame == "CNC_C":
-            pos, ori = sim_env.robot_list[0].get_position_relative_to_link(
-                bodyA_id=sim_env.robot_list[0].id_robot,
-                bodyB_id=sim_env.machine.id_robot,
+            pos, ori = DT_env.robot_list[0].get_position_relative_to_link(
+                bodyA_id=DT_env.robot_list[0].id_robot,
+                bodyB_id=DT_env.machine.id_robot,
                 linkA_id=5,
-                linkB_id=sim_env.machine.turntable_index,
+                linkB_id=DT_env.machine.turntable_index,
             )
         else:
             return {"status": "error", "message": "No reference frame matched"}
@@ -221,18 +251,18 @@ async def get_robot_end_pos_and_ori(request: GetPosOriRequest):
 async def get_tcp_pos_and_ori(request: GetPosOriRequest):
     """ API: 获取机械臂末端位置 """
     try:
-        if len(sim_env.robot_list) == 0:
+        if len(DT_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
         if request.reference_frame == "body":
-            pos, ori = sim_env.robot_list[0].get_pos_ori_from_ik(tcp_name="rolling_tool")
+            pos, ori = DT_env.robot_list[0].get_pos_ori_from_ik(tcp_name="rolling_tool")
         elif request.reference_frame == "world":
-            pos, ori = sim_env.robot_list[0].show_link_sys(10,1,1)
+            pos, ori = DT_env.robot_list[0].show_link_sys(10,1,1)
         elif request.reference_frame == "CNC_C":
-            pos, ori = sim_env.robot_list[0].get_position_relative_to_link(
-                bodyA_id=sim_env.robot_list[0].id_robot,
-                bodyB_id=sim_env.machine.id_robot,
+            pos, ori = DT_env.robot_list[0].get_position_relative_to_link(
+                bodyA_id=DT_env.robot_list[0].id_robot,
+                bodyB_id=DT_env.machine.id_robot,
                 linkA_id=10,
-                linkB_id=sim_env.machine.turntable_index,
+                linkB_id=DT_env.machine.turntable_index,
             )
         else:
             return {"status": "error", "message": "No reference frame matched"}
@@ -302,14 +332,14 @@ async def publish_robot_state(request: dict):
     try:
         global current_task
         on_pub = request.get("on_subscribe", True)
-        if len(sim_env.robot_list) == 0:
+        if len(DT_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
 
         async def pub_robot_state():
             while True:
                 try:
                     await asyncio.sleep(0.1)
-                    joint_states = sim_env.robot_list[0].get_joints_states()
+                    joint_states = DT_env.robot_list[0].get_joints_states()
                     robot_state = {
                         "status": "success",
                         "jointstates": joint_states,
@@ -350,16 +380,29 @@ async def publish_robot_state(request: dict):
 
 
 
-def run_pybullet_service():
+def run_digital_twin_service():
     """ 启动PyBullet仿真服务 """
     # simulation_thread = threading.Thread(target=run_simulation, daemon=True)
     # simulation_thread.start()
-    # sim_env.initialize()
-    uvicorn.run(app, host="127.0.0.1", port=8001,
+    # DT_env.initialize()
+    uvicorn.run(app, host="127.0.0.1", port=8003,
                 reload=False,
                 log_level="info",
                 loop="asyncio",
                 )  # 设置为8001端口运行
 
+
+def run_digital_twin_service_byhand():
+    """ 启动PyBullet仿真服务 """
+    # simulation_thread = threading.Thread(target=run_simulation, daemon=True)
+    # simulation_thread.start()
+    DT_env.initialize()
+    uvicorn.run(app, host="127.0.0.1", port=8004,
+                reload=False,
+                log_level="info",
+                loop="asyncio",
+                )  # 设置为8001端口运行
+
+
 if __name__ == "__main__":
-    run_pybullet_service()
+    run_digital_twin_service_byhand()

@@ -20,7 +20,7 @@ from ui.widgets.pybullet_tool_panel_widget import ToolPanel
 class PyBulletEmbedder:
     """PyBullet窗口嵌入工具类"""
 
-    def __init__(self, container_widget,window_title:str="PyBulletSimulation"):
+    def __init__(self, container_widget,window_title:str="PyBulletDT"):
         self.container = container_widget
         self.window_title = window_title
         self.display = Xlib.display.Display()
