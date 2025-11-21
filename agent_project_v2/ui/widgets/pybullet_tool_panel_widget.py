@@ -6,6 +6,8 @@ from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread, QTimer
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QLabel,
                              QLineEdit, QSizePolicy, QGroupBox, QLayout, QApplication
                              )
+
+from core.async_tools import AsyncRunner
 import asyncio
 import websockets
 import re
@@ -159,6 +161,7 @@ class ArmToolPage(QWidget):
     def __init__(self, parent=None, simulation_view=None):
         super().__init__(parent)
         self.simulation_view = simulation_view
+
         layout = QHBoxLayout(self)
 
         button_layout = QVBoxLayout()
@@ -168,6 +171,7 @@ class ArmToolPage(QWidget):
         self.get_end_effector_btn = QPushButton("获取机械臂末端关节坐标")
         self.show_tcp_axis_btn = QPushButton("显示TCP坐标轴")
         self.subscribe_btn = QPushButton("订阅机械臂状态")
+        self.synchronize_DT_btn = QPushButton("同步数字孪生状态")
 
 
         # 坐标信息显示窗口
@@ -233,6 +237,7 @@ class ArmToolPage(QWidget):
         button_layout.addWidget(self.get_end_effector_btn)
         button_layout.addWidget(self.show_tcp_axis_btn)
         button_layout.addWidget(self.subscribe_btn)
+        button_layout.addWidget(self.synchronize_DT_btn)
         layout.addLayout(button_layout)
         layout.addWidget(self.coord_display_widget)
 
@@ -280,6 +285,11 @@ class ArmToolPage(QWidget):
         self.get_end_effector_btn.clicked.connect(self.on_get_robot_end_effector_btn_clicked)
         self.show_tcp_axis_btn.clicked.connect(self.on_show_tcp_axis_btn_clicked)
         self.subscribe_btn.clicked.connect(self.on_subscribe_btn_clicked)
+        # 点击同步DT按钮后的操作
+        self.synchronize_DT_btn.clicked.connect(self.on_synchronize_DT_btn_clicked)
+        # 负责执行获取仿真环境机械臂数据的任务
+        self.async_runner_for_synchronize_digital_twin_state = AsyncRunner(self)
+        self.async_runner_for_synchronize_digital_twin_state.finished.connect(self.handle_synchronize_DT_result)
 
         # copy button
         self.GUI_copy_pos_btn.clicked.connect(self.copy_data)
@@ -526,6 +536,30 @@ class ArmToolPage(QWidget):
                     self.simulation_view.env_loop)
         except Exception as e:
             print(f"[ArmToolPage:on_set_robot_data] Error set robot data: {str(e)}")
+
+
+    def on_synchronize_DT_btn_clicked(self):
+        """同步数字孪生状态按钮事件"""
+        try:
+
+            coro = self.simulation_view.pybullet_process.env.get_DT_robot_joints_state()
+            self.async_runner_for_synchronize_digital_twin_state.run(self.simulation_view.env_loop, coro)
+
+        except Exception as e:
+            print(f"[ArmToolPage:on_synchronize_DT_btn_clicked] Error synchronize DT state: {str(e)}")
+        pass
+
+    def handle_synchronize_DT_result(self, result):
+        """处理同步数字孪生状态的结果"""
+        status = result.get("status", None)
+        joints = result.get("joints_state", None)
+        if status is not None and status == "success" and joints is not None:
+            asyncio.run_coroutine_threadsafe(
+                self.simulation_view.pybullet_process.env.reset_joints_state(joints),
+                self.simulation_view.env_loop)
+            print("[ArmToolPage:handle_synchronize_DT_result] 同步数字孪生状态成功")
+        else:
+            print("[ArmToolPage:handle_synchronize_DT_result] 同步数字孪生状态失败:", result.get("message", "Unknown error"))
 
 
 

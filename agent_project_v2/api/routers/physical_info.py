@@ -154,7 +154,13 @@ async def get_joint_pos():
 async def joint_move(request:JointMoveRequest):
     """ API: 启动仿真环境 """
     try:
-        joint_pos = await physical_driver.joint_move(
+
+        if not physical_driver.connected:
+            print("[execution:physical:api:joint_move] Robot not connected.")
+            return {"status": "failed", "message": []}
+
+
+        ret = await physical_driver.joint_move(
             joint_positions=request.joint_positions,
             move_mode=request.move_mode,
             speed=request.speed,
@@ -162,8 +168,8 @@ async def joint_move(request:JointMoveRequest):
             is_block=request.is_block,
             tol=request.tol
         )
-        if joint_pos is not None:
-            return {"status": "success", "message": joint_pos}
+        if ret[0] == 0:
+            return {"status": "success", "message": ret[0]}
         return {"status": "failed", "message": []}
     except Exception as e:
         print("[execution:physical:api:joint_move] Error joint_move:", e)
@@ -196,6 +202,7 @@ async def stop_subscribe():
     except Exception as e:
         print("[execution:physical:api:stop_subscribe] Error:", e)
         return {"status": "error", "message": str(e)}
+
 
 
 

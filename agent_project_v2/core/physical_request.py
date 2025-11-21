@@ -8,7 +8,7 @@ class JointMoveRequest(BaseModel):
     move_mode: int = 0  # 0表示绝对位置，1表示相对位置
     speed: Optional[float] = 1
     acc: Optional[float] = 1
-    is_block: bool = True
+    is_block: bool = False
     tol: Optional[float] = 0.0
 
     def to_dict(self):

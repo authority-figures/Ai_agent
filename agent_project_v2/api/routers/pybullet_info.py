@@ -103,6 +103,18 @@ async def get_object_pos_and_ori(request: GetIDRequest):
         return {"status": "error", "message": str(e)}
 
 
+@app.post("/reset_joints_state")
+async def reset_joints_state(request: JointMoveRequest):
+    """ API: 重置机械臂关节状态 """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        sim_env.robot_list[0].set_joints_states(request.target_joint_angles)
+        return {"status": "success", "message": "Joints state reset"}
+    except Exception as e:
+        print("[execution:simulation:api:reset_joints_state] Error resetting joints state:", e)
+        return {"status": "error", "message": str(e)}
+
 
 @app.post("/move_robot_to_target")
 async def move_robot_to_target(request: PosMoveRequest):
@@ -146,6 +158,21 @@ async def move_robot_to_target(request: PosMoveRequest):
     except Exception as e:
         print("[execution:simulation:api:move_robot_to_target] Error moving robot to target:", e)
         return {"status": "error", "message": str(e)}
+
+
+@app.post("/joint_move")
+async def joint_move(request: JointMoveRequest):
+    """ API: joint move关节状态 """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        sim_env.robot_list[0].joint_move_once(request.target_joint_angles, maxVelocity=request.maxVelocity)
+        return {"status": "success", "message": "Joints state reset"}
+    except Exception as e:
+        print("[execution:simulation:api:reset_joints_state] Error resetting joints state:", e)
+        return {"status": "error", "message": str(e)}
+
+
 
 
 @app.post("/create_cube")

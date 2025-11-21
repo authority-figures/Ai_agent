@@ -21,3 +21,14 @@ class PosMoveRequest(BaseModel):
     def to_dict(self):
         """将对象转换为字典，便于 JSON 序列化"""
         return self.dict()  # Pydantic 的 `dict()` 方法将模型转化为字典
+
+
+class JointMoveRequest(BaseModel):
+    robot_id: Optional[int] = None
+    target_joint_angles: List[float]  # 确保关节角是浮点数列表
+    maxVelocity: float = 1
+
+
+    def to_dict(self):
+        """将对象转换为字典，便于 JSON 序列化"""
+        return self.dict()  # Pydantic 的 `dict()` 方法将模型转化为字典

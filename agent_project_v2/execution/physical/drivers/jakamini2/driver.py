@@ -209,7 +209,7 @@ class Jakamini2Driver(RobotInterface):
 
 
 
-    async def joint_move(self, joint_positions,move_mode=0, speed=1, acc=1,is_block=True,tol=0.0):
+    async def joint_move(self, joint_positions,move_mode=0, speed=1, acc=1,is_block=True,tol=0.0)->tuple:
         """
         简单包装一下joint_move。
         joint_positions 是关节位置

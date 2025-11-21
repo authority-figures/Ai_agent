@@ -184,3 +184,41 @@ class CustomSimulationEnv:
                 return response.json()
             else:
                 return {"status": "error", "message": "Failed to subscribe_robot_state"}
+
+    async def get_DT_robot_joints_state(self):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"http://localhost:8003/get_robot_joints_state")
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to get_DT_robot_joints_state"}
+        except Exception as e:
+            print(f"[simulation_process:CustomSimulationEnv:get_DT_robot_joints_state] Exception: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def reset_joints_state(self, joint_positions):
+        try:
+            request = JointMoveRequest(target_joint_angles=joint_positions)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/reset_joints_state", json=request.to_dict())
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to reset_joints_state"}
+        except Exception as e:
+            print(f"[simulation_process:CustomSimulationEnv:reset_joints_state] Exception: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def joint_move(self, joint_positions):
+        try:
+            request = JointMoveRequest(target_joint_angles=joint_positions)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/joint_move", json=request.to_dict())
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to joint_move"}
+        except Exception as e:
+            print(f"[simulation_process:CustomSimulationEnv:joint_move] Exception: {e}")
+            return {"status": "error", "message": str(e)}

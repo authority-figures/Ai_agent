@@ -2,10 +2,11 @@
 import time
 import asyncio
 from core.simulation_request import *
+import core.physical_request as physical_request
 import httpx
 class Jakamini2QtApi:
     def __init__(self, base_url="http://localhost:8002"):
-        self.base_url = base_url
+        self.base_url = base_url    # physical_info
 
     async def connect(self,ip):
         try:
@@ -107,6 +108,19 @@ class Jakamini2QtApi:
                     return {"status": "error", "message": "Failed to stop subscribe"}
         except Exception as e:
             print("[jakamini2_qt_api:Jakamini2QtApi:stop_subscribe] Error stopping subscribe:", e)
+            return {"status": "error", "message": str(e)}
+
+    async def joint_move(self,joint_positions:list):
+        try:
+            request = physical_request.JointMoveRequest(joint_positions=joint_positions)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/joint_move", json=request.to_dict(), timeout=10)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to move joints"}
+        except Exception as e:
+            print("[jakamini2_qt_api:Jakamini2QtApi:joint_move] Error moving joints:", e)
             return {"status": "error", "message": str(e)}
 
 

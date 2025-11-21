@@ -56,7 +56,7 @@ def parse_robot_status(raw_status: List[Any]) -> Dict[str, Any]:
     return status
 
 
-class RobotStatusDialog(QDialog):
+class RobotStatusDialog(QWidget):
     def __init__(self, status_dict: Dict[str, Any], parent=None):
         super().__init__(parent)
         self.setWindowTitle("Robot Status Details")
@@ -83,7 +83,7 @@ class RobotStatusDialog(QDialog):
         main_layout.addWidget(scroll)
 
         btn_close = QPushButton("Close", self)
-        btn_close.clicked.connect(self.accept)
+        btn_close.clicked.connect(self.close)
         main_layout.addWidget(btn_close, alignment=Qt.AlignRight)
 
 
@@ -103,4 +103,7 @@ if __name__ == '__main__':
         "errors": None
     }
     dialog = RobotStatusDialog(sample_status)
-    dialog.exec_()
+    dialog.show()  # 不阻塞
+    dialog.raise_()  # 置顶
+    dialog.activateWindow()  # 激活焦点
+    sys.exit(app.exec_())

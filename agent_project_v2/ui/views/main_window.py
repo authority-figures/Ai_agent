@@ -28,10 +28,10 @@ class MainWindow(QMainWindow):
         # ===== 左侧：标签页容器（Simulation / Digital Twin）=====
         # # 左侧：仿真视图（占60%宽度）
         self.tab_widget = QTabWidget()
-        self.simulation_view = SimulationView()
+        self.simulation_view = SimulationView(self)
         self.tab_widget.addTab(self.simulation_view, "Simulation")
         # 数字孪生视图
-        self.digital_twin_view = DigitalTwinView()
+        self.digital_twin_view = DigitalTwinView(self)
         self.tab_widget.addTab(self.digital_twin_view, "Digital Twin")
 
         main_splitter.addWidget(self.tab_widget)

@@ -132,6 +132,18 @@ async def get_object_pos_and_ori(request: GetIDRequest):
         print("[execution:simulation:api:get_object_pos_and_ori] Error getting object pos and ori:", e)
         return {"status": "error", "message": str(e)}
 
+@app.post("/get_robot_joints_state")
+async def get_robot_joints_state():
+    """ API: 获取机械臂末端位置 """
+    try:
+        if len(DT_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        joints = DT_env.robot_list[0].get_joints_states()
+        return {"status": "success", "joints_state": joints}
+    except Exception as e:
+        print("[execution:simulation:api:get_object_pos_and_ori] Error getting object pos and ori:", e)
+        return {"status": "error", "message": str(e)}
+
 
 
 @app.post("/move_robot_to_target")

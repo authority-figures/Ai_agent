@@ -12,6 +12,7 @@ import threading
 # from ui.views.simulation_view import PyBulletEmbedder
 from execution.digital_twin.digital_twin_process import DigitalTwinProcess,CustomDigitalTwinEnv
 from ui.widgets.robot_state_widget import *
+from ui.widgets.DT_debug_widget import RobotDebugWidget
 import Xlib
 import Xlib.display
 from Xlib import X
@@ -201,28 +202,45 @@ class DigitalTwinView(QWidget):
         self.robot_ip_input.addItem("192.168.1.3")
         ip_layout.addWidget(self.robot_ip_input)
 
-        # 将组合框添加到 QGroupBox
-        self.connection_groupbox.layout().addRow("IP Address:", ip_layout)
-
         # 4. 连接按钮
         self.connect_button = QPushButton("Connect", self)
         self.connect_button.clicked.connect(self.connect_to_robot)
-        self.connection_groupbox.layout().addRow(self.connect_button)
+        ip_layout.addWidget(self.connect_button)
 
+        # 将组合框添加到 QGroupBox
+        self.connection_groupbox.layout().addRow("IP Address:", ip_layout)
+
+
+        # 电源与启用按钮放在一行
+        button_row1 = QHBoxLayout()
         # 5. 电源开关按钮
         self.power_button = QPushButton("Power On", self)
         self.power_button.clicked.connect(self.toggle_power)
-        self.connection_groupbox.layout().addRow(self.power_button)
+        button_row1.addWidget(self.power_button)
+
 
         # 6. 启用/禁用按钮
         self.enable_button = QPushButton("Enable", self)
         self.enable_button.clicked.connect(self.toggle_enable)
-        self.connection_groupbox.layout().addRow(self.enable_button)
+        button_row1.addWidget(self.enable_button)
+        self.connection_groupbox.layout().addRow(button_row1)
 
+        # 订阅和 debug 按钮放在一行
+        button_row2 = QHBoxLayout()
         # 7. 订阅机械臂状态按钮
         self.subscribe_status_button = QPushButton("Subscribe Robot Status", self)
         self.subscribe_status_button.clicked.connect(self.toggle_subscribe)
-        self.connection_groupbox.layout().addRow(self.subscribe_status_button)
+        button_row2.addWidget(self.subscribe_status_button)
+
+        # 8. 打开debug窗口按钮
+        self.debug_button =QPushButton("Open Debug Window",self)
+        if hasattr(self.parent(), 'simulation_view'):
+            self.debug_widget = RobotDebugWidget(self.parent().simulation_view,self)
+        else:
+            print("[DT View:create_connect_group] Warning: parent has no simulation_view attribute, debug window may not work properly.")
+        self.debug_button.clicked.connect(self.on_debug_button_clicked)
+        button_row2.addWidget(self.debug_button)
+        self.connection_groupbox.layout().addRow(button_row2)
 
         # 将连接设置放在界面最上方且靠左
         self.layout().addWidget(self.connection_groupbox)
@@ -358,10 +376,16 @@ class DigitalTwinView(QWidget):
         """点击 Details... 按钮弹出详情窗口"""
         if not self._last_robot_status_dict:
             # 没有数据就不弹，或者弹个提示
-            dlg = RobotStatusDialog({"info": "No robot status received yet."}, self)
+            dlg = RobotStatusDialog({"info": "No robot status received yet."}, )
         else:
-            dlg = RobotStatusDialog(self._last_robot_status_dict, self)
-        dlg.exec_()
+            dlg = RobotStatusDialog(self._last_robot_status_dict,)
+
+        dlg.show()  # 不阻塞
+        dlg.raise_()  # 置顶
+        dlg.activateWindow()  # 激活焦点
+
+        # 为了不被垃圾回收，要保存引用：
+        self._details_window = dlg
 
     def on_ws_connection_lost(self, msg: str):
         print("[DT] WebSocket connection lost:", msg)
@@ -490,7 +514,7 @@ class DigitalTwinView(QWidget):
                 print(f"Connected to robot at {ip}")
 
                 self.power_button.setEnabled(True)
-                self.enable_button.setEnabled(True)
+
 
                 # 可以在这里直接启动，或者在“连接机器人成功”后再启动
                 self.status_listener.start()    # 激活监听线程
@@ -523,11 +547,13 @@ class DigitalTwinView(QWidget):
         if self.power_button.text() == "Power On":
             self.power_button.setText("Power Off")
             self.power_button.setStyleSheet("background-color: green;")
+            self.enable_button.setEnabled(True)
             asyncio.run_coroutine_threadsafe(self.robot_api.power_on(), self.loop)
             print("Power On")
         else:
             self.power_button.setText("Power On")
             self.power_button.setStyleSheet("background-color: lightgray;")
+            self.enable_button.setEnabled(False)
             asyncio.run_coroutine_threadsafe(self.robot_api.power_off(), self.loop)
             print("Power Off")
 
@@ -558,6 +584,14 @@ class DigitalTwinView(QWidget):
             asyncio.run_coroutine_threadsafe(self.robot_api.stop_subscribe(), self.loop)
 
             print("Unsubscribed from Robot Status")
+
+    def on_debug_button_clicked(self):
+        if hasattr(self, 'debug_widget'):
+            self.debug_widget.show()
+            self.debug_widget.raise_()
+            self.debug_widget.activateWindow()
+        else:
+            print("[DT View:on_debug_button_clicked] Error: debug_widget attribute not found.")
 
 
 

@@ -664,7 +664,7 @@ class Robot:
 
     def has_reached_target(self,target_values, tolerance):
 
-        current_positions = [p.getJointState(self.id_robot, i)[0] for i in range(len(target_values))]
+        current_positions = [p.getJointState(self.id_robot, i, physicsClientId=self.id_client)[0] for i in range(len(target_values))]
         if_return = all(not target or (abs(current - target) < tolerance) for current, target in
                         zip(current_positions, target_values))
         return if_return
@@ -820,6 +820,8 @@ class Robot:
                     targetVelocity=0,
                     physicsClientId=self.id_client,
                 )
+
+            print("Reached target or timeout reached. Robot velocity set to zero.")
 
         return "Robot moved successfully"
 
