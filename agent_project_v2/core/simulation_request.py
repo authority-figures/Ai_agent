@@ -32,3 +32,13 @@ class JointMoveRequest(BaseModel):
     def to_dict(self):
         """将对象转换为字典，便于 JSON 序列化"""
         return self.dict()  # Pydantic 的 `dict()` 方法将模型转化为字典
+
+class PathPlanRequest(BaseModel):
+    planner_name: Optional[str] = "RRTConnect_Custom"
+    start_joints: List[float]  # 确保关节角是浮点数列表
+    target_joints: List[float]  # 确保关节角是浮点数列表
+
+
+    def to_dict(self):
+        """将对象转换为字典，便于 JSON 序列化"""
+        return self.dict()  # Pydantic 的 `dict()` 方法将模型转化为字典

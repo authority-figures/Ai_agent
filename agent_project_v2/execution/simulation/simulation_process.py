@@ -142,6 +142,23 @@ class CustomSimulationEnv:
             print(f"[CustomSimulationEnv:set_robot_end_pos_and_ori] Exception: {e}")
             return {"status": "error", "message": str(e)}
 
+    async def set_robot_joints(self, joints_data, maxVelocity=1):
+        try:
+            request = {
+                "robot_id": None,
+                "target_joint_angles": joints_data,
+                "maxVelocity": maxVelocity
+            }
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/joint_move", json=request,timeout=10)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to set_robot_end_pos_and_ori"}
+        except Exception as e:
+            print(f"[CustomSimulationEnv:set_robot_end_pos_and_ori] Exception: {e}")
+            return {"status": "error", "message": str(e)}
+
     async def add_object(self, urdf_path, basePosition, baseOrientation, useFixedBase):
         data = {
             "urdf_path": urdf_path,
@@ -221,4 +238,23 @@ class CustomSimulationEnv:
                     return {"status": "error", "message": "Failed to joint_move"}
         except Exception as e:
             print(f"[simulation_process:CustomSimulationEnv:joint_move] Exception: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def plan_path(self, request: PathPlanRequest):
+        """
+        TODO
+        :param target_position:
+        :param target_orientation:
+        :return:
+        """
+        try:
+            request = request
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/plan_path", json=request.to_dict(),timeout=10)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to plan_path"}
+        except Exception as e:
+            print(f"[CustomSimulationEnv:plan_path] Exception: {e}")
             return {"status": "error", "message": str(e)}

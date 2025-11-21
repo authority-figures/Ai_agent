@@ -173,6 +173,43 @@ async def joint_move(request: JointMoveRequest):
         return {"status": "error", "message": str(e)}
 
 
+@app.post("/plan_path")
+async def plan_path(request: PathPlanRequest):
+    """
+     API: 规划路径
+    """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+
+        if request.planner_name == "RRTConnect_Custom" or request.planner_name == "RRTConnect":
+            sim_env.pb_ompl_interface.set_planner("RRTConnect")
+
+
+            sim_env.robot_list[0].set_state(request.start_joints)
+            # 执行规划
+            sim_env.pb_ompl_interface.get_T_goal(request.target_joints, tcp_name="rolling_tool")
+            sim_env.pb_ompl_interface.z_range = (0.01, 0.2)  # z-axis range for sampling
+            sim_env.pb_ompl_interface.x_range = (-0.01, 0.01)
+            sim_env.pb_ompl_interface.y_range = (-0.001, 0.001)
+            sim_env.pb_ompl_interface.yaw_range = 30
+            sim_env.pb_ompl_interface.roll_range = 5
+            sim_env.pb_ompl_interface.pitch_range = 5
+            sim_env.pb_ompl_interface.set_tsRRT_sample()
+            sim_env.pb_ompl_interface.set_planner("RRTConnect")
+            # sim_env.pb_ompl_interface.set_state_sampler(taskspaceRRT.MixedValidStateSampler(sim_env.pb_ompl_interface.si, sim_env.pb_ompl_interface.sample_in_task_space, ratio=0.8))
+            res, path = sim_env.pb_ompl_interface.plan(request.target_joints)
+            if res:
+                return {"status": "success", "path": path}
+
+
+
+        return {"status": "failed", "path": None}
+    except Exception as e:
+        print("[execution:simulation:api:plan_path] Error planning path:", e)
+        return {"status": "error", "message": str(e)}
+
+
 
 
 @app.post("/create_cube")

@@ -4,13 +4,15 @@ from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread, QTimer
 
 
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QLabel,
-                             QLineEdit, QSizePolicy, QGroupBox, QLayout, QApplication
+                             QLineEdit, QSizePolicy, QGroupBox, QLayout, QApplication, QSpacerItem, QFormLayout
                              )
 
 from core.async_tools import AsyncRunner
 import asyncio
 import websockets
+import logging
 import re
+from core.simulation_request import *
 
 colors = {
     "light_gray": "#f0f0f0",
@@ -297,7 +299,7 @@ class ArmToolPage(QWidget):
         self.GUI_copy_joints_angle_btn.clicked.connect(self.copy_data)
         self.GUI_set_pos_btn.clicked.connect(self.on_set_robot_data)
         self.GUI_set_ori_btn.clicked.connect(self.on_set_robot_data)
-        # self.GUI_set_joints_angle_btn.clicked.connect(self.on_set_robot_data)
+        self.GUI_set_joints_angle_btn.clicked.connect(self.on_set_robot_joint_data)
 
         pass
 
@@ -476,9 +478,11 @@ class ArmToolPage(QWidget):
     def on_subscribe_btn_clicked(self):
         if self.subscribe_btn.text() == "订阅机械臂状态":
             self.subscribe_btn.setText("取消订阅机械臂状态")
+            self.subscribe_btn.setStyleSheet("background-color: lightgreen;")
             self.subscribe_changed.emit(True)
         else:
             self.subscribe_btn.setText("订阅机械臂状态")
+            self.subscribe_btn.setStyleSheet("")
             self.subscribe_changed.emit(False)
 
     def on_subscribe_changed(self,on_subscribe):
@@ -537,6 +541,16 @@ class ArmToolPage(QWidget):
         except Exception as e:
             print(f"[ArmToolPage:on_set_robot_data] Error set robot data: {str(e)}")
 
+    def on_set_robot_joint_data(self):
+        try:
+            joints_data = self.GUI_set_joints_angle_btn.line_edit.text()
+            joints_data = self.extract_floats_from_text(joints_data)
+            if joints_data:
+                asyncio.run_coroutine_threadsafe(
+                    self.simulation_view.pybullet_process.env.set_robot_joints(joints_data, maxVelocity=0.5),
+                    self.simulation_view.env_loop)
+        except Exception as e:
+            print(f"[ArmToolPage:on_set_robot_joint_data] Error set robot data: {str(e)}")
 
     def on_synchronize_DT_btn_clicked(self):
         """同步数字孪生状态按钮事件"""
@@ -573,6 +587,240 @@ class MachineToolPage(QWidget):
 
         # 在此页面中添加具体的机床工具组件
 
+
+
+class PathToolPage(QWidget):
+    """路径规划工具页面"""
+    plan_finished = pyqtSignal(dict)
+    def __init__(self, parent=None,tool_pannel=None):
+        super().__init__(parent)
+        self.tool_pannel = tool_pannel
+        self.layout = QVBoxLayout(self)
+        self.label = QLabel("路径规划工具页面")
+        self.layout.addWidget(self.label)
+
+        self.paths_dict = {}
+        self.num_path = 1
+        self.init_ui()
+
+
+    def init_ui(self):
+        # ===================== 1. 规划算法选择（顶部） =====================
+        algo_layout = QHBoxLayout()
+        algo_label = QLabel("Planner:", self)
+        self.planner_combo = QComboBox(self)
+        # 这里先放几个占位的规划算法名称，你可以按实际再改
+        self.planner_combo.addItems([
+            "RRTConnect_Custom",
+            "RRTConnect",
+            "PRM",
+            "TaskSpaceRRT"
+        ])
+
+        algo_layout.addWidget(algo_label)
+        algo_layout.addWidget(self.planner_combo)
+        algo_layout.addStretch(1)
+
+        self.layout.addLayout(algo_layout)
+
+        # ===================== 2. Start / Target joints 行 =====================
+        form_layout = QFormLayout()
+        form_layout.setLabelAlignment(Qt.AlignRight)
+        form_layout.setFormAlignment(Qt.AlignLeft | Qt.AlignTop)
+        form_layout.setHorizontalSpacing(10)
+        form_layout.setVerticalSpacing(8)
+
+        # ---- Start joints 行 ----
+        start_row = QHBoxLayout()
+        self.start_joints_edit = QLineEdit(self)
+        self.start_joints_edit.setPlaceholderText("j1, j2, j3, j4, j5, j6 （弧度）")
+        btn_start_copy = QPushButton("Copy From Sim", self)
+        btn_start_copy.clicked.connect(self.on_copy_start_from_sim_clicked)
+
+        start_row.addWidget(self.start_joints_edit)
+        start_row.addWidget(btn_start_copy)
+
+        form_layout.addRow("Start joints:", start_row)
+
+        # ---- Target joints 行 ----
+        target_row = QHBoxLayout()
+        self.target_joints_edit = QLineEdit(self)
+        self.target_joints_edit.setPlaceholderText("j1, j2, j3, j4, j5, j6 （弧度）")
+        btn_target_copy = QPushButton("Copy From Sim", self)
+        btn_target_copy.clicked.connect(self.on_copy_target_from_sim_clicked)
+
+        target_row.addWidget(self.target_joints_edit)
+        target_row.addWidget(btn_target_copy)
+
+        form_layout.addRow("Target joints:", target_row)
+
+        self.layout.addLayout(form_layout)
+
+        # ===================== 3. 下方操作按钮行 =====================
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(1)
+
+        self.btn_plan = QPushButton("Plan", self)
+        self.btn_execute = QPushButton("Execute", self)
+        self.btn_inverse = QPushButton("Inverse", self)
+
+        self.btn_plan.clicked.connect(self.on_plan_clicked)
+        self.plan_finished.connect(self.on_plan_finished_in_gui)
+        self.btn_execute.clicked.connect(self.on_execute_clicked)
+        self.btn_inverse.clicked.connect(self.on_inverse_clicked)
+
+        btn_row.addWidget(self.btn_plan)
+        btn_row.addWidget(self.btn_execute)
+        btn_row.addWidget(self.btn_inverse)
+
+        self.layout.addLayout(btn_row)
+
+        # 填充一下底部空间，让内容靠上
+        self.layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+    def on_copy_start_from_sim_clicked(self):
+        """
+        然后填入 self.start_joints_edit，例如格式：'0.0, 1.0, 0.5, ...'
+        """
+        try:
+            if not hasattr(self.tool_pannel, "arm_tool_page") or self.tool_pannel.arm_tool_page is None:
+                print("[PathToolPage] ToolPage not set.")
+                return
+            if not hasattr(self.tool_pannel.arm_tool_page,
+                           "GUI_joints_angle_data") or self.tool_pannel.arm_tool_page.GUI_joints_angle_data is None:
+                print("[PathToolPage] 请打开仿真环境的机械臂状态订阅器.")
+                return
+
+            joints_text = self.tool_pannel.arm_tool_page.GUI_joints_angle_data.text()
+            angles_str_list = [s.strip() for s in joints_text.split(',')]
+            if not all(angles_str_list):
+                print("[PathToolPage] 仿真环境的机械臂状态数据不正确，请打开.")
+                logging.info("[PathToolPage] 仿真环境的机械臂状态数据不正确，请打开.")
+                return
+            joint_angles = list(map(float, angles_str_list))
+            start_text = ", ".join(f"{j:.5f}" for j in joint_angles)
+            self.start_joints_edit.setText(start_text)
+            print("[PathToolPage] Copied joint state from simulation.")
+            logging.info("[PathToolPage] Copied joint state from simulation.")
+        except Exception as e:
+            print(f"[PathToolPage:on_copy_start_from_sim_clicked] Error: {e}")
+            logging.info(f"[PathToolPage:on_copy_start_from_sim_clicked] Error: {e}")
+
+    def on_copy_target_from_sim_clicked(self):
+        """
+        """
+        try:
+            if not hasattr(self.tool_pannel, "arm_tool_page") or self.tool_pannel.arm_tool_page is None:
+                print("[PathToolPage] ToolPage not set.")
+                return
+            if not hasattr(self.tool_pannel.arm_tool_page,"GUI_joints_angle_data") or self.tool_pannel.arm_tool_page.GUI_joints_angle_data is None:
+                print("[PathToolPage] 请打开仿真环境的机械臂状态订阅器.")
+                return
+
+            joints_text = self.tool_pannel.arm_tool_page.GUI_joints_angle_data.text()
+            angles_str_list = [s.strip() for s in joints_text.split(',')]
+            if not all(angles_str_list):
+                logging.info("[PathToolPage] 仿真环境的机械臂状态数据不正确，请打开.")
+                return
+            joint_angles = list(map(float, angles_str_list))
+            target_text = ", ".join(f"{j:.5f}" for j in joint_angles)
+            self.target_joints_edit.setText(target_text)
+            logging.info("[PathToolPage] Copied joint state from simulation.")
+        except Exception as e:
+            logging.info(f"[PathToolPage:on_copy_target_from_sim_clicked] Error: {e}")
+
+
+    def on_plan_clicked(self):
+        """
+        将规划出的 path 保存到某个结构里，或显示在别的控件中。
+        """
+        try:
+            planner_name = self.planner_combo.currentText()
+            logging.info(f"[PathToolPage] Plan clicked. planner={planner_name}")
+            start_text = self.start_joints_edit.text().strip()  # 逗号分隔的字符串
+            target_text = self.target_joints_edit.text().strip()
+
+            start_angles_str_list = [s.strip() for s in start_text.split(',')]
+            if not all(start_angles_str_list):
+                logging.info("[PathToolPage] start joints 数据不正确.")
+                return
+            start_joint_angles = list(map(float, start_angles_str_list))
+            logging.info(f"  start joints: {start_text}")
+            target_angles_str_list = [s.strip() for s in target_text.split(',')]
+            if not all(target_angles_str_list):
+                logging.info("[PathToolPage] target joints 数据不正确.")
+                return
+            target_joint_angles = list(map(float, target_angles_str_list))
+            logging.info(f"  target joints: {target_text}")
+
+            request = PathPlanRequest(
+                planner_name=planner_name,
+                start_joints = start_joint_angles,
+                target_joints = target_joint_angles
+            )
+            future = asyncio.run_coroutine_threadsafe(self.tool_pannel.simulation_view.pybullet_process.env.plan_path(request),
+                                                      self.tool_pannel.simulation_view.env_loop)
+            # 修改plan按钮的颜色为黄色，表示正在规划中
+            self.btn_plan.setStyleSheet("background-color: yellow")
+            self.btn_plan.setText("Planning...")
+            self.btn_plan.setEnabled(False)
+
+            # 注册连接完成后的回调函数（关键：通过回调处理结果）
+            future.add_done_callback(lambda f: self.on_plan_done(f))
+        except Exception as e:
+            print(f"[PathToolPage:on_plan_clicked] Error: {e}")
+
+    def on_plan_finished_in_gui(self, result: dict):
+        if result.get("status") == "success":
+            logging.info("[PathToolPage] Path planning succeeded.")
+            self.btn_plan.setStyleSheet("background-color: green")
+            self.btn_plan.setText("Plan")
+            self.btn_plan.setEnabled(True)
+            # 2. 使用 QTimer.singleShot 在 2 秒后执行恢复操作
+            # lambda 表达式用于传递额外的参数（原始样式和文本）
+            QTimer.singleShot(
+                2000,
+                lambda: self.btn_plan.setStyleSheet("")
+            )
+            ...
+        else:
+            ...
+
+    def on_plan_done(self, future):
+        """路径规划完成后的回调函数（处理结果并更新UI）"""
+        try:
+            # 获取异步连接的返回结果
+            result = future.result()
+            # 根据连接结果判断（假设成功时result无error字段）
+            if result.get("status") == "success":
+                self.plan_finished.emit(result)  # Qt 自动把信号投递到 GUI 线程
+                path = result.get("path", [])
+                name = f"path_{self.num_path:04d}"
+                self.paths_dict[name] = path
+
+                self.num_path+=1
+            else:
+                # 连接失败（如API返回错误）
+                pass
+        except Exception as e:
+            # 连接过程中发生异常（如超时、网络错误）
+            print(f"Connection failed: {e}")
+
+    def on_execute_clicked(self):
+        """
+        TODO: 执行已规划好的路径：可以发给仿真环境，也可以发给物理层 driver。
+        """
+        print("[PathToolPage] Execute clicked (待实现)")
+
+    def on_inverse_clicked(self):
+        """
+        TODO: 对现在已有 path 做反向（例如 path[::-1]），
+        或者 start/target 交换后再规划，按你的需求定义。
+        """
+        print("[PathToolPage] Inverse clicked (待实现)")
+
+
+
 class OtherToolPage(QWidget):
     """其他工具页面"""
     def __init__(self, parent=None):
@@ -602,6 +850,7 @@ class ToolPanel(QWidget):
         self.page_selector = QComboBox()
         self.page_selector.addItem("机械臂工具")
         self.page_selector.addItem("机床工具")
+        self.page_selector.addItem("路径规划工具")
         self.page_selector.addItem("其他工具")
         self.page_selector.currentIndexChanged.connect(self.switch_page)
         self.layout.addWidget(self.page_selector)
@@ -613,11 +862,13 @@ class ToolPanel(QWidget):
         # 创建每个工具页面
         self.arm_tool_page = ArmToolPage(simulation_view=self.simulation_view)
         self.machine_tool_page = MachineToolPage()
+        self.path_tool_page = PathToolPage(tool_pannel=self)
         self.other_tool_page = OtherToolPage()
 
         # 将页面添加到 QStackedWidget
         self.stacked_widget.addWidget(self.arm_tool_page)
         self.stacked_widget.addWidget(self.machine_tool_page)
+        self.stacked_widget.addWidget(self.path_tool_page)
         self.stacked_widget.addWidget(self.other_tool_page)
 
         # 将 QStackedWidget 添加到布局
@@ -629,6 +880,7 @@ class ToolPanel(QWidget):
         # 去除每个页面的布局间隙
         self.remove_layout_spacing(self.arm_tool_page)
         self.remove_layout_spacing(self.machine_tool_page)
+        self.remove_layout_spacing(self.path_tool_page)
         self.remove_layout_spacing(self.other_tool_page)
 
     def switch_page(self, index):

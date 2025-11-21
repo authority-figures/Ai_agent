@@ -80,7 +80,7 @@ class RobotDebugWidget(QWidget):
             (-2 * math.pi, 2 * math.pi),  # J6: [-360°, 360°]
         ]
         for i in range(6):
-            lbl =  QLabel(f"J{i + 1} (rad):", row_widget)
+            lbl =  QLabel(f"J{i + 1}:", row_widget)
             layout.addWidget(lbl)
 
             spin = QDoubleSpinBox(row_widget)
@@ -419,7 +419,7 @@ if __name__ == "__main__":
     app = QApplication(sys.argv)
 
     # 这里你需要传入一个 DigitalTwinEnv 实例
-    dt_env = None  # TODO: 创建并初始化 DigitalTwinEnv 实例
+    dt_env = None
 
     widget = RobotDebugWidget(dt_env,None)
     widget.resize(400, 600)
