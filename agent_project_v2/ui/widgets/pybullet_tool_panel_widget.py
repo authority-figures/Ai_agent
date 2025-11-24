@@ -1,11 +1,13 @@
 import json
 
-from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread, QTimer
+from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread, QTimer, QSize
 
 
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QLabel,
-                             QLineEdit, QSizePolicy, QGroupBox, QLayout, QApplication, QSpacerItem, QFormLayout
+                             QLineEdit, QSizePolicy, QGroupBox, QLayout, QApplication, QSpacerItem, QFormLayout,
+                             QButtonGroup, QToolButton, QFrame
                              )
+from PyQt5.QtGui import QIcon,QPixmap
 
 from core.async_tools import AsyncRunner
 import asyncio
@@ -847,17 +849,27 @@ class ToolPanel(QWidget):
         self.layout.setContentsMargins(0, 0, 0, 0)
 
         # 1. 工具选择下拉框
-        self.page_selector = QComboBox()
-        self.page_selector.addItem("机械臂工具")
-        self.page_selector.addItem("机床工具")
-        self.page_selector.addItem("路径规划工具")
-        self.page_selector.addItem("其他工具")
-        self.page_selector.currentIndexChanged.connect(self.switch_page)
-        self.layout.addWidget(self.page_selector)
+        # 1. 顶部工具按钮条（代替 QComboBox）
+        # === 新增：一个有边框的整体容器 frame ===
+        self.panel_frame = QFrame(self)
+        self.panel_frame.setObjectName("toolPanelFrame")
+        panel_layout = QVBoxLayout(self.panel_frame)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(0)
+        self._build_toolbar(panel_layout)
+        self.layout.addWidget(self.panel_frame)
+
+        # self.page_selector = QComboBox()
+        # self.page_selector.addItem("机械臂工具")
+        # self.page_selector.addItem("机床工具")
+        # self.page_selector.addItem("路径规划工具")
+        # self.page_selector.addItem("其他工具")
+        # self.page_selector.currentIndexChanged.connect(self.switch_page)
+        # self.layout.addWidget(self.page_selector)
 
         # 2. QStackedWidget 用于管理工具页面
         self.stacked_widget = QStackedWidget(self)
-        self.stacked_widget.setContentsMargins(0, 0, 0, 0)  # 去除 QStackedWidget 的内边距
+        self.stacked_widget.setContentsMargins(4, 4, 4, 4)  # 去除 QStackedWidget 的内边距
 
         # 创建每个工具页面
         self.arm_tool_page = ArmToolPage(simulation_view=self.simulation_view)
@@ -872,7 +884,7 @@ class ToolPanel(QWidget):
         self.stacked_widget.addWidget(self.other_tool_page)
 
         # 将 QStackedWidget 添加到布局
-        self.layout.addWidget(self.stacked_widget)
+        panel_layout.addWidget(self.stacked_widget)
 
         # 设置默认页面
         self.stacked_widget.setCurrentIndex(0)  # 默认显示机械臂工具页面
@@ -882,6 +894,120 @@ class ToolPanel(QWidget):
         self.remove_layout_spacing(self.machine_tool_page)
         self.remove_layout_spacing(self.path_tool_page)
         self.remove_layout_spacing(self.other_tool_page)
+
+    def _build_toolbar(self, parent_layout):
+        toolbar_layout = QHBoxLayout()
+        toolbar_layout.setContentsMargins(0, 0, 0, 0)
+        toolbar_layout.setSpacing(8)
+
+        self.btn_group = QButtonGroup(self)
+        self.btn_group.setExclusive(True)  # 互斥选择
+
+        # 定义按钮配置： (index, text, icon_path)
+        # icon_path 你可以自己换成实际的图标路径，或者先 None
+        btn_configs = [
+            (0, "机械臂", "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/ui/resources/icons/robot.png"),
+            (1, "机床", "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/ui/resources/icons/machine.png"),
+            (2, "路径规划", "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/ui/resources/icons/path.png"),
+            (3, "其他", None),
+        ]
+
+        BTN_SIZE = 25  # 按钮宽高（图标最大化填充）
+        ICON_MARGIN = 10  # 图标四周预留的边距（减少压迫感）
+
+        self.toolbar_buttons = []
+
+        for index, text, icon_path in btn_configs:
+            btn = QToolButton(self)
+            btn.setCheckable(True)
+            btn.setToolButtonStyle(Qt.ToolButtonIconOnly)
+            btn.setFixedSize(BTN_SIZE, BTN_SIZE)
+            # btn.setAutoRaise(False)
+
+            if icon_path:
+                # pix = QPixmap(icon_path).scaled(
+                #     20,20,
+                #     Qt.IgnoreAspectRatio, Qt.SmoothTransformation
+                # )
+                # btn.setIcon(QIcon(pix))
+                btn.setIcon(QIcon(icon_path))
+                btn.setIconSize(QSize(BTN_SIZE-ICON_MARGIN, BTN_SIZE-ICON_MARGIN))
+
+            btn.clicked.connect(lambda checked, idx=index: self.switch_page(idx))
+
+            toolbar_layout.addWidget(btn)
+            self.btn_group.addButton(btn, index)
+            self.toolbar_buttons.append(btn)
+
+        toolbar_layout.addStretch(1)  # 右侧留一点空白
+
+        # 简单的样式，美化一下按钮
+        self.setStyleSheet("""
+                QToolButton {
+                    border: none;
+                    margin: 0px;
+                    border-radius: 0px;
+                    padding: 0px;
+                    background-color: #ffffff;
+                    color: #dddddd;
+                }
+                QToolButton:checked {
+                    background-color: #007acc;
+                    border-color: #0088ff;
+                    color: white;
+                }
+                QToolButton:hover {
+                    background-color: #505357;
+                }
+                """)
+
+        parent_layout.addLayout(toolbar_layout)
+        self._apply_style()
+        pass
+
+    def _apply_style(self):
+        self.setStyleSheet("""
+        /* 整个工具面板的外框 */
+        QFrame#toolPanelFrame {
+            border: 1px solid #555555;
+            border-radius: 0px;
+            background-color: #eeeeee;
+        }
+
+        /* 顶部按钮：未选中状态 */
+        QToolButton {
+            border: 1px solid #555555;
+            border-bottom: none;                /* 底边让给内容区域 */
+            border-top-left-radius: 0px;
+            border-top-right-radius: 0px;
+            border-bottom-left-radius: 0;
+            border-bottom-right-radius: 0;
+            padding: 0px 0px;
+            background-color: #aaaaaa;
+            color: #dddddd;
+        }
+
+        /* 鼠标悬停 */
+        QToolButton:hover {
+            background-color: #4b4f52;
+        }
+
+        /* 选中的按钮：像激活的 Tab */
+        QToolButton:checked {
+            background-color: #ffffff;
+            border-color: #409eff;
+            color: white;
+        }
+
+        /* 内容区域：与按钮共享同一边框 */
+        QStackedWidget {
+            border-top: 1px solid #ffffff;      /* 补上被按钮“挖走”的那条缝 */
+            border-left: none;
+            border-right: none;
+            border-bottom: none;
+            background-color: #ffffff;
+        }
+        """)
 
     def switch_page(self, index):
         """切换工具页面"""

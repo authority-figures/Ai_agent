@@ -215,7 +215,7 @@ class SimulationView(QWidget):
         # 2. 主布局：管理内部所有控件（标题+状态+控制+仿真容器）
         # ==============================================
         main_layout = QVBoxLayout(self)
-        main_layout.setContentsMargins(12, 12, 12, 12)  # 布局与视图边界贴合（依赖视图的padding）
+        main_layout.setContentsMargins(8, 8, 8, 8)  # 布局与视图边界贴合（依赖视图的padding）
         main_layout.setSpacing(12)  # 控件之间的间距，提升分层感
 
         # ==============================================
