@@ -202,10 +202,10 @@ class RM_sys:
 
         if physicsClientId is None:
             raise ValueError("Physics client ID cannot be None.")
-        robot_end_mass = Robot.get_com_in_link_frame(robot.id_robot, robot.id_end_effector)
+        robot_end_mass = Robot.get_com_in_link_frame(robot.id_robot, robot.id_end_effector,physicsClientId=self.id_client)
         robot_end_in_mass_sys = np.array(pos_in_robot_end_link) - np.array(robot_end_mass)
 
-        gripper_mass = Robot.get_com_in_link_frame(gripper.id_robot, -1, baseFramePosition=gripper.baseLinkPosition)
+        gripper_mass = Robot.get_com_in_link_frame(gripper.id_robot, -1, baseFramePosition=gripper.baseLinkPosition,physicsClientId=self.id_client)
         gripper_in_mass_sys = np.array(pos_in_gripper_base_link) - np.array(gripper_mass)
 
         constraint_id = p.createConstraint(parentBodyUniqueId=robot.id_robot,

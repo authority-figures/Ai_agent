@@ -17,7 +17,7 @@ from typing import TypedDict, Annotated, Union, Optional,Type,List
 from Robot import Robot
 from Machine import Machine
 from RM_sys import RM_sys
-from agent_project.simulation import pb_ompl,taskspaceRRT
+from execution.simulation import pb_ompl,taskspaceRRT
 from scipy.spatial.transform import Rotation as R
 
 class Calibration_board(Robot):
@@ -34,15 +34,15 @@ class Calibration_board(Robot):
 
     def reset_position_and_orientation(self,position=None,orientation=None):
         if (position is not None)and(orientation is not None):
-            p.resetBasePositionAndOrientation(self.id_robot, posObj=position, ornObj=orientation)
+            p.resetBasePositionAndOrientation(self.id_robot, posObj=position, ornObj=orientation,physicsClientId=self.id_client)
             self.nowPosition = position
             self.nowOrientation = orientation
         else:
             if position is not None:
-                p.resetBasePositionAndOrientation(self.id_robot, posObj=position, ornObj=self.nowOrientation)
+                p.resetBasePositionAndOrientation(self.id_robot, posObj=position, ornObj=self.nowOrientation,physicsClientId=self.id_client)
                 self.nowPosition = position
             if orientation is not None:
-                p.resetBasePositionAndOrientation(self.id_robot, posObj=self.nowPosition, ornObj=orientation)
+                p.resetBasePositionAndOrientation(self.id_robot, posObj=self.nowPosition, ornObj=orientation,physicsClientId=self.id_client)
                 self.nowOrientation = orientation
         pass
 

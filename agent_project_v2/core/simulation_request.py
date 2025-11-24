@@ -42,3 +42,12 @@ class PathPlanRequest(BaseModel):
     def to_dict(self):
         """将对象转换为字典，便于 JSON 序列化"""
         return self.dict()  # Pydantic 的 `dict()` 方法将模型转化为字典
+
+class ExecutePathRequest(BaseModel):
+    joints_list: List[List[float]]  # 确保关节角是浮点数列表的列表
+    maxVelocity: float = 1
+    dynamics: bool = False
+
+    def to_dict(self):
+        """将对象转换为字典，便于 JSON 序列化"""
+        return self.dict()  # Pydantic 的 `dict()` 方法将模型转化为字典

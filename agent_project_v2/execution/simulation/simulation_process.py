@@ -242,7 +242,6 @@ class CustomSimulationEnv:
 
     async def plan_path(self, request: PathPlanRequest):
         """
-        TODO
         :param target_position:
         :param target_orientation:
         :return:
@@ -250,11 +249,28 @@ class CustomSimulationEnv:
         try:
             request = request
             async with httpx.AsyncClient() as client:
-                response = await client.post(f"{self.base_url}/plan_path", json=request.to_dict(),timeout=10)
+                response = await client.post(f"{self.base_url}/plan_path", json=request.to_dict(),timeout=200)
                 if response.status_code == 200:
                     return response.json()
                 else:
                     return {"status": "error", "message": "Failed to plan_path"}
         except Exception as e:
             print(f"[CustomSimulationEnv:plan_path] Exception: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def execute_path(self, request: ExecutePathRequest):
+        """
+        :param ExecutePathRequest:
+        :return:
+        """
+        try:
+            request = request
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/execute_path", json=request.to_dict(),timeout=20)
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to execute_path"}
+        except Exception as e:
+            print(f"[CustomSimulationEnv:execute_path] Exception: {e}")
             return {"status": "error", "message": str(e)}

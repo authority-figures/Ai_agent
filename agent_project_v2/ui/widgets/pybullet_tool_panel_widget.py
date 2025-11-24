@@ -5,7 +5,7 @@ from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread, QTimer, QSize
 
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QLabel,
                              QLineEdit, QSizePolicy, QGroupBox, QLayout, QApplication, QSpacerItem, QFormLayout,
-                             QButtonGroup, QToolButton, QFrame
+                             QButtonGroup, QToolButton, QFrame,QHeaderView, QTableWidget, QTableWidgetItem
                              )
 from PyQt5.QtGui import QIcon,QPixmap
 
@@ -15,6 +15,7 @@ import websockets
 import logging
 import re
 from core.simulation_request import *
+from ui.widgets.DT_debug_widget import PathDataDialog
 
 colors = {
     "light_gray": "#f0f0f0",
@@ -416,7 +417,7 @@ class ArmToolPage(QWidget):
 
     def update_joint_angles_display(self, joint_angles):
         """更新关节角度的显示"""
-        joint_angles_text = ", ".join([f"{angle:.2f}" for angle in joint_angles])
+        joint_angles_text = ", ".join([f"{angle:.5f}" for angle in joint_angles])
         self.GUI_joints_angle_data.setText(joint_angles_text)
 
 
@@ -594,6 +595,7 @@ class MachineToolPage(QWidget):
 class PathToolPage(QWidget):
     """路径规划工具页面"""
     plan_finished = pyqtSignal(dict)
+    execute_finished = pyqtSignal(dict)
     def __init__(self, parent=None,tool_pannel=None):
         super().__init__(parent)
         self.tool_pannel = tool_pannel
@@ -662,6 +664,7 @@ class PathToolPage(QWidget):
         btn_row = QHBoxLayout()
         btn_row.addStretch(1)
 
+
         self.btn_plan = QPushButton("Plan", self)
         self.btn_execute = QPushButton("Execute", self)
         self.btn_inverse = QPushButton("Inverse", self)
@@ -669,6 +672,7 @@ class PathToolPage(QWidget):
         self.btn_plan.clicked.connect(self.on_plan_clicked)
         self.plan_finished.connect(self.on_plan_finished_in_gui)
         self.btn_execute.clicked.connect(self.on_execute_clicked)
+        self.execute_finished.connect(self.on_execute_finished_in_gui)
         self.btn_inverse.clicked.connect(self.on_inverse_clicked)
 
         btn_row.addWidget(self.btn_plan)
@@ -677,8 +681,33 @@ class PathToolPage(QWidget):
 
         self.layout.addLayout(btn_row)
 
+        self._build_path_table(self.layout)
+
         # 填充一下底部空间，让内容靠上
         self.layout.addItem(QSpacerItem(20, 40, QSizePolicy.Minimum, QSizePolicy.Expanding))
+
+    def _build_path_table(self, parent_layout: QVBoxLayout):
+        """构建路径列表表格，用于显示所有规划出的路径"""
+        self.paths_table = QTableWidget(self)
+        self.paths_table.setColumnCount(3)
+        self.paths_table.setHorizontalHeaderLabels(["Name", "Points", "Remark"])
+        self.paths_table.verticalHeader().setVisible(False)
+        self.paths_table.setSelectionBehavior(self.paths_table.SelectRows)
+        self.paths_table.setSelectionMode(self.paths_table.SingleSelection)
+        self.paths_table.setEditTriggers(self.paths_table.NoEditTriggers)
+        self.paths_table.setAlternatingRowColors(True)
+
+        header = self.paths_table.horizontalHeader()
+        header.setSectionResizeMode(0, QHeaderView.Stretch)  # Name 列自适应
+        header.setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        header.setSectionResizeMode(2, QHeaderView.Stretch)
+
+        # 单击：选中对应路径
+        self.paths_table.itemClicked.connect(self.on_path_item_clicked)
+        # 双击：打开 PathDataDialog 查看数据
+        self.paths_table.itemDoubleClicked.connect(self.on_path_item_double_clicked)
+
+        parent_layout.addWidget(self.paths_table)
 
     def on_copy_start_from_sim_clicked(self):
         """
@@ -770,6 +799,7 @@ class PathToolPage(QWidget):
             # 注册连接完成后的回调函数（关键：通过回调处理结果）
             future.add_done_callback(lambda f: self.on_plan_done(f))
         except Exception as e:
+            self.plan_finished.emit({"status":"error","message":str(e)})
             print(f"[PathToolPage:on_plan_clicked] Error: {e}")
 
     def on_plan_finished_in_gui(self, result: dict):
@@ -786,6 +816,15 @@ class PathToolPage(QWidget):
             )
             ...
         else:
+            error = result.get("message","")
+            logging.info(f"[PathToolPage] Path planning failed. error:{error}")
+            self.btn_plan.setStyleSheet("background-color: red")
+            self.btn_plan.setText("Plan")
+            self.btn_plan.setEnabled(True)
+            QTimer.singleShot(
+                2000,
+                lambda: self.btn_plan.setStyleSheet("")
+            )
             ...
 
     def on_plan_done(self, future):
@@ -801,18 +840,140 @@ class PathToolPage(QWidget):
                 self.paths_dict[name] = path
 
                 self.num_path+=1
+
+                # 更新表格
+                self.add_path_to_table(name, path)
             else:
                 # 连接失败（如API返回错误）
+                logging.info("[PathToolPage] Path planning failed.")
+                self.plan_finished.emit(result)
                 pass
         except Exception as e:
+            self.plan_finished.emit(result)
             # 连接过程中发生异常（如超时、网络错误）
             print(f"Connection failed: {e}")
+
+
+
+
+    def add_path_to_table(self, name: str, path):
+        """在表格中增加一条路径记录"""
+        row = self.paths_table.rowCount()
+        self.paths_table.insertRow(row)
+
+        # Name 列
+        item_name = QTableWidgetItem(name)
+        item_name.setTextAlignment(Qt.AlignCenter)
+        self.paths_table.setItem(row, 0, item_name)
+
+        # Points 列：路径包含的点数
+        n_points = len(path) if path is not None else 0
+        item_points = QTableWidgetItem(str(n_points))
+        item_points.setTextAlignment(Qt.AlignCenter)
+        self.paths_table.setItem(row, 1, item_points)
+
+        # Remark 列：先简单空着，后面你可以写 planner 名称、时间等
+        remark = ""
+        item_remark = QTableWidgetItem(remark)
+        item_remark.setTextAlignment(Qt.AlignCenter)
+        self.paths_table.setItem(row, 2, item_remark)
+
+
+    def on_path_item_clicked(self, item):
+        """单击路径行：选中对应路径"""
+        row = item.row()
+        name_item = self.paths_table.item(row, 0)
+        if not name_item:
+            return
+        name = name_item.text()
+        self.current_path_name = name
+        # 你可以在这里做一些 UI 提示，比如在状态栏打印
+        print(f"[PathToolPage] selected path: {name}")
+
+    def on_path_item_double_clicked(self, item):
+        """双击路径行：用 PathDataDialog 查看该路径的关节数据"""
+        row = item.row()
+        name_item = self.paths_table.item(row, 0)
+        if not name_item:
+            return
+        name = name_item.text()
+
+        path_data = self.paths_dict.get(name)
+        if path_data is None:
+            print(f"[PathToolPage] no path data for: {name}")
+            return
+
+        dlg = PathDataDialog(path_data, name,sim_view=self.tool_pannel.simulation_view)
+        dlg.show()  # 非阻塞
+        dlg.raise_()
+        dlg.activateWindow()
+
+        # 为防止被 GC 回收，保留引用
+        self._last_data_dialog = dlg
+
 
     def on_execute_clicked(self):
         """
         TODO: 执行已规划好的路径：可以发给仿真环境，也可以发给物理层 driver。
         """
-        print("[PathToolPage] Execute clicked (待实现)")
+        try:
+            if not hasattr(self, "current_path_name"):
+                logging.info("[PathToolPage] 请先选择一个规划好的路径.")
+                return
+            path_name = self.current_path_name
+            path = self.paths_dict.get(path_name)
+            if path is None:
+                logging.info(f"[PathToolPage] 未找到路径数据: {path_name}")
+                return
+
+            request = ExecutePathRequest(
+                joints_list=path,
+            )
+            future = asyncio.run_coroutine_threadsafe(
+                self.tool_pannel.simulation_view.pybullet_process.env.execute_path(request),
+                self.tool_pannel.simulation_view.env_loop)
+            # 修改plan按钮的颜色为黄色，表示正在规划中
+            self.btn_execute.setStyleSheet("background-color: yellow")
+            self.btn_execute.setText("Executing...")
+            self.btn_execute.setEnabled(False)
+
+            # 注册连接完成后的回调函数（关键：通过回调处理结果）
+            future.add_done_callback(lambda f: self.on_execute_done(f))
+        except Exception as e:
+            print(f"[PathToolPage:on_plan_clicked] Error: {e}")
+
+    def on_execute_done(self,future):
+        """路径执行完成后的回调函数（处理结果并更新UI）"""
+        try:
+            # 获取异步连接的返回结果
+            result = future.result()
+            # 根据连接结果判断（假设成功时result无error字段）
+            if result.get("status") == "success":
+                logging.info("[PathToolPage] Path execution succeeded.")
+                self.execute_finished.emit(result)  # Qt 自动把信号投递到 GUI 线程
+                ...
+            else:
+                logging.info("[PathToolPage] Path execution failed.")
+                self.execute_finished.emit(result)
+                ...
+        except Exception as e:
+            # 连接过程中发生异常（如超时、网络错误）
+            print(f"Connection failed: {e}")
+
+    def on_execute_finished_in_gui(self,result: dict):
+        if result.get("status") == "success":
+            self.btn_execute.setStyleSheet("background-color: green")
+            self.btn_execute.setText("execute")
+            self.btn_execute.setEnabled(True)
+            # 2. 使用 QTimer.singleShot 在 2 秒后执行恢复操作
+            # lambda 表达式用于传递额外的参数（原始样式和文本）
+            QTimer.singleShot(
+                2000,
+                lambda: self.btn_execute.setStyleSheet("")
+            )
+            ...
+        else:
+            ...
 
     def on_inverse_clicked(self):
         """

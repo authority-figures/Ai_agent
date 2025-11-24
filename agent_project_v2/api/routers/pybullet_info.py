@@ -179,13 +179,17 @@ async def plan_path(request: PathPlanRequest):
      API: 规划路径
     """
     try:
+
+
         if len(sim_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
 
         if request.planner_name == "RRTConnect_Custom" or request.planner_name == "RRTConnect":
-            sim_env.pb_ompl_interface.set_planner("RRTConnect")
 
-
+            running_flag = False
+            if sim_env.is_running:
+                running_flag = True
+                sim_env.stop_simulation()
             sim_env.robot_list[0].set_state(request.start_joints)
             # 执行规划
             sim_env.pb_ompl_interface.get_T_goal(request.target_joints, tcp_name="rolling_tool")
@@ -199,9 +203,12 @@ async def plan_path(request: PathPlanRequest):
             sim_env.pb_ompl_interface.set_planner("RRTConnect")
             # sim_env.pb_ompl_interface.set_state_sampler(taskspaceRRT.MixedValidStateSampler(sim_env.pb_ompl_interface.si, sim_env.pb_ompl_interface.sample_in_task_space, ratio=0.8))
             res, path = sim_env.pb_ompl_interface.plan(request.target_joints)
+
+            if running_flag:
+                sim_env.start_simulation()
+
             if res:
                 return {"status": "success", "path": path}
-
 
 
         return {"status": "failed", "path": None}
@@ -209,6 +216,20 @@ async def plan_path(request: PathPlanRequest):
         print("[execution:simulation:api:plan_path] Error planning path:", e)
         return {"status": "error", "message": str(e)}
 
+
+
+@app.post("/execute_path")
+async def execute_path(request: ExecutePathRequest):
+    """ API: 执行路径 """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        if sim_env.pb_ompl_interface:
+            sim_env.pb_ompl_interface.execute(request.joints_list, dynamics=request.dynamics)
+        return {"status": "success", "message": "Path executed"}
+    except Exception as e:
+        print("[execution:simulation:api:execute_path] Error executing path:", e)
+        return {"status": "error", "message": str(e)}
 
 
 

@@ -95,15 +95,16 @@ class Machine(Robot):
                 jointDamping=0.2,
                 mass=10,
                 linearDamping=0.5, angularDamping=0.5,
+                physicsClientId=self.id_client
             )
         force = 100000
         mode = p.VELOCITY_CONTROL
-        p.setJointMotorControl2(self.id_robot, 0, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(self.id_robot, 1, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(self.id_robot, 2, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(self.id_robot, 3, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(self.id_robot, 4, mode, targetVelocity=0, force=force)
-        p.setJointMotorControl2(self.id_robot, 5, mode, targetVelocity=0, force=force)
+        p.setJointMotorControl2(self.id_robot, 0, mode, targetVelocity=0, force=force, physicsClientId=self.id_client)
+        p.setJointMotorControl2(self.id_robot, 1, mode, targetVelocity=0, force=force, physicsClientId=self.id_client)
+        p.setJointMotorControl2(self.id_robot, 2, mode, targetVelocity=0, force=force, physicsClientId=self.id_client)
+        p.setJointMotorControl2(self.id_robot, 3, mode, targetVelocity=0, force=force, physicsClientId=self.id_client)
+        p.setJointMotorControl2(self.id_robot, 4, mode, targetVelocity=0, force=force, physicsClientId=self.id_client)
+        p.setJointMotorControl2(self.id_robot, 5, mode, targetVelocity=0, force=force, physicsClientId=self.id_client)
 
 
 
@@ -193,7 +194,7 @@ class Machine(Robot):
 
 
         # 获取S轴的世界坐标系下的位置和姿态
-        S_axis_state = p.getLinkState(self.id_robot, self.spindle_index)
+        S_axis_state = p.getLinkState(self.id_robot, self.spindle_index,physicsClientId=self.id_client)
         S_axis_pos, S_axis_ori = S_axis_state[4], S_axis_state[5]
 
         # 将tool的位置和姿态转换为相对于世界坐标系的位置和姿态
@@ -205,8 +206,8 @@ class Machine(Robot):
         tool_id = p.loadURDF(tool_urdf_path, world_position, useFixedBase=False,physicsClientId=self.id_client)
 
         for i in range(self.num_all_joints+1):
-            p.setCollisionFilterPair(self.id_robot, tool_id, i, -1, 0)
-        p.setCollisionFilterPair(self.id_robot, tool_id, -1, -1, 0)
+            p.setCollisionFilterPair(self.id_robot, tool_id, i, -1, 0,physicsClientId=self.id_client)
+        p.setCollisionFilterPair(self.id_robot, tool_id, -1, -1, 0,physicsClientId=self.id_client)
 
         # p.setCollisionFilterPair(self.id_robot, tool_id, 1, -1, 0)
         # p.setCollisionFilterPair(self.id_robot, tool_id, -1, -1, 0)
@@ -216,7 +217,7 @@ class Machine(Robot):
         # p.setCollisionFilterPair(self.id_robot, tool_id, 3, -1, 0)
         # p.setCollisionFilterPair(self.id_robot, tool_id, 2, -1, 0)
         # 获取父link的质心坐标
-        parentFramePosition = self.get_com_in_link_frame(self.id_robot, self.spindle_index)
+        parentFramePosition = self.get_com_in_link_frame(self.id_robot, self.spindle_index,physicsClientId=self.id_client)
         if type == 'center':
             childLinkIndex = 0
         elif type == 'bottom':
@@ -234,6 +235,7 @@ class Machine(Robot):
                            parentFramePosition=[-parentFramePosition[0], -parentFramePosition[1], -parentFramePosition[2]],
                            childFramePosition=[-0, -0, tool_length],
                            childFrameOrientation=p.getQuaternionFromEuler((0, 0, 0)),
+                           physicsClientId=self.id_client
                            )
 
 
@@ -249,7 +251,7 @@ class Machine(Robot):
 
 
     def show_link_sys(self, linkIndex=0, lifetime=0, type=0):
-        endEffectorState = p.getLinkState(self.id_robot, linkIndex)
+        endEffectorState = p.getLinkState(self.id_robot, linkIndex,physicsClientId=self.id_client)
         # endEffectorPos = endEffectorState[0]
         # 假设endEffectorPos和endEffectorOri是你从getLinkState获取的位置和方向
         if type == 0:
@@ -258,7 +260,7 @@ class Machine(Robot):
         else:
             endEffectorPos, endEffectorOri = endEffectorState[4], endEffectorState[5]
         # 计算旋转矩阵
-        rot_matrix = p.getMatrixFromQuaternion(endEffectorOri)
+        rot_matrix = p.getMatrixFromQuaternion(endEffectorOri,physicsClientId=self.id_client)
         rot_matrix = np.array(rot_matrix).reshape(3, 3)
 
         # 定义轴的长度
@@ -267,17 +269,17 @@ class Machine(Robot):
         # 绘制X轴（红色）
         x_axis = rot_matrix @ np.array([axis_length, 0, 0])
         p.addUserDebugLine(endEffectorPos, endEffectorPos + x_axis, lineColorRGB=[1, 0, 0], lineWidth=2,
-                           lifeTime=lifetime)
+                           lifeTime=lifetime,physicsClientId=self.id_client)
 
         # 绘制Y轴（绿色）
         y_axis = rot_matrix @ np.array([0, axis_length, 0])
         p.addUserDebugLine(endEffectorPos, endEffectorPos + y_axis, lineColorRGB=[0, 1, 0], lineWidth=2,
-                           lifeTime=lifetime)
+                           lifeTime=lifetime,physicsClientId=self.id_client)
 
         # 绘制Z轴（蓝色）
         z_axis = rot_matrix @ np.array([0, 0, axis_length])
         p.addUserDebugLine(endEffectorPos, endEffectorPos + z_axis, lineColorRGB=[0, 0, 1], lineWidth=2,
-                           lifeTime=lifetime)
+                           lifeTime=lifetime,physicsClientId=self.id_client)
         pass
 
     # def parse_nc_code(self, file_path):
@@ -378,10 +380,10 @@ class Machine(Robot):
         relative_pos, relative_ori = self.get_position_relative_to_link(bodyA_id, bodyB_id, linkA_id, linkB_id)
 
         # 将姿态转换为欧拉角
-        relative_euler = p.getEulerFromQuaternion(relative_ori)
+        relative_euler = p.getEulerFromQuaternion(relative_ori,physicsClientId=self.id_client)
 
         # 计算姿态偏差的旋转矩阵
-        rot_matrix = p.getMatrixFromQuaternion(relative_ori)
+        rot_matrix = p.getMatrixFromQuaternion(relative_ori,physicsClientId=self.id_client)
         rot_matrix = np.array(rot_matrix).reshape(3, 3)
 
         # 计算旋转后的相对位置
@@ -474,10 +476,10 @@ class Machine(Robot):
 
         if np.pi-wind<last_joint_value<np.pi and -np.pi+wind>this_joint_value>-np.pi:
             last_joint_value_ = last_joint_value-2*np.pi
-            p.resetJointState(self.id_robot,c_index,last_joint_value_)
+            p.resetJointState(self.id_robot,c_index,last_joint_value_,physicsClientId=self.id_client)
         elif -np.pi+wind>last_joint_value>-np.pi and np.pi-wind<this_joint_value<np.pi:
             last_joint_value_ = last_joint_value + 2*np.pi
-            p.resetJointState(self.id_robot,c_index,last_joint_value_)
+            p.resetJointState(self.id_robot,c_index,last_joint_value_,physicsClientId=self.id_client)
 
         pass
 
@@ -496,7 +498,7 @@ class Machine(Robot):
         joint_indices = list(range(len(axes)))
         def has_reached_target(target_values, tolerance):
 
-            current_positions = [p.getJointState(self.id_robot, i)[0] for i in joint_indices]
+            current_positions = [p.getJointState(self.id_robot, i,physicsClientId=self.id_client)[0] for i in joint_indices]
             if_return = all( not target or (abs(current - target) < tolerance) for current, target in zip(current_positions, target_values))
             return if_return
         id = 0
@@ -505,8 +507,8 @@ class Machine(Robot):
                 id+=1
                 for i, axis_value in enumerate(joint_values):
                     if axis_value is not None and axes[i] in ['A', 'C', 'X', 'Y', 'Z']:  # 确保该轴有值
-                        p.resetJointState(self.id_robot, jointIndex=i, targetValue=axis_value)
-                p.stepSimulation()
+                        p.resetJointState(self.id_robot, jointIndex=i, targetValue=axis_value,physicsClientId=self.id_client)
+                p.stepSimulation(physicsClientId=self.id_client)
                 time.sleep(1*time_scale/240.)
                 if show_state:
                     print(
@@ -515,7 +517,7 @@ class Machine(Robot):
         else:
             for joint_values in joint_values_list:
                 id+=1
-                current_joints = [p.getJointState(self.id_robot, i)[0] for i in joint_indices]
+                current_joints = [p.getJointState(self.id_robot, i,physicsClientId=self.id_client)[0] for i in joint_indices]
                 # self.interpolation_path([current_joints,joint_values],)
                 for i, axis_value in enumerate(joint_values):
                     maxVelocity = acVelocity if i in [0,1] else xyzVelocity
@@ -532,11 +534,12 @@ class Machine(Robot):
                                                 velocityGain=0.5,  # KD
                                                 force=100000,
                                                 maxVelocity=maxVelocity,
+                                                physicsClientId=self.id_client
                                                 )
 
                 joint_values_for_judge = np.delete(joint_values, axes.index('N'))
                 while not has_reached_target(joint_values_for_judge, tolerance):
-                    p.stepSimulation()
+                    p.stepSimulation(physicsClientId=self.id_client)
                     time.sleep(1*time_scale/240.)
 
 
@@ -568,8 +571,8 @@ class Machine(Robot):
         for i,joint_value in enumerate(joint_values):
 
             if joint_value is not None:  # 确保该轴有值
-                p.resetJointState(self.id_robot, jointIndex=i, targetValue=joint_value)
-        p.stepSimulation()
+                p.resetJointState(self.id_robot, jointIndex=i, targetValue=joint_value,physicsClientId=self.id_client)
+        p.stepSimulation(physicsClientId=self.id_client)
 
         pass
 

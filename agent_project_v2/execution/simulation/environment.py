@@ -9,6 +9,13 @@ PI = np.pi
 from scipy.interpolate import CubicSpline
 import threading
 
+# os.environ["QT_PLUGIN_PATH"] = ""
+os.environ["QT_QPA_PLATFORM_PLUGIN_PATH"] = qt_platform_path
+os.environ["QT_QPA_PLATFORM"] = ""
+print("PYTHON:", sys.executable)
+print("QT_PLUGIN_PATH:", os.environ.get("QT_PLUGIN_PATH"))
+print("QT_QPA_PLATFORM:", os.environ.get("QT_QPA_PLATFORM"))
+print("DISPLAY:", os.environ.get("DISPLAY"))
 
 
 class SimulationEnvironment:
@@ -150,7 +157,7 @@ class SimulationEnvironment:
         # self.pb_ompl_interface = pb_ompl.PbOMPL(self.robot_list[0], self.obstacles)
         self.pb_ompl_interface = taskspaceRRT.TaskSpaceRRT(self.robot_list[0], self.obstacles)
         self.pb_ompl_interface.set_planner("RRT")
-        self.obstacles.extend([self.workpiece_id,machine.id_robot])
+        self.obstacles.extend([self.workpiece_id,self.machine.id_robot])
         self.pb_ompl_interface.set_obstacles(self.obstacles)
         # 消除ompl规划时link4与link8的碰撞
         self.pb_ompl_interface.check_link_pairs.remove((4,8))
@@ -492,10 +499,10 @@ class SimulationEnvironment:
             # ori_in_cam_base_link = [0,0,0,1]
             robot = self.robot_list[0]
             camera = self.camera
-            robot_end_mass = Robot.get_com_in_link_frame(robot.id_robot, 5)
+            robot_end_mass = Robot.get_com_in_link_frame(robot.id_robot, 5,physicsClientId=self.physics_client)
             robot_end_in_mass_sys = np.array(pos_in_robot_end_link) - np.array(robot_end_mass)
 
-            camera_mass = Robot.get_com_in_link_frame(camera.id_robot, 3,)
+            camera_mass = Robot.get_com_in_link_frame(camera.id_robot, 3,physicsClientId=self.physics_client)
             camera_in_mass_sys = - np.array(camera_mass)
 
             constraint_id = p.createConstraint(parentBodyUniqueId=robot.id_robot,

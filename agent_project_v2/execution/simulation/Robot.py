@@ -568,7 +568,7 @@ class Robot:
 
 
     def run_joints_lists(self,joints_lists,robot_id, sleep_time=0.05, KP=0.1, KD=0.3,targetVelocity=0.2):
-        num_joints = p.getNumJoints(robot_id)
+        num_joints = p.getNumJoints(robot_id,physicsClientId=self.id_client)
         # 遍历所有给定的关节角列表
         for joints in joints_lists:
             # 检查关节角列表的长度与机器人关节数是否匹配
@@ -581,10 +581,11 @@ class Robot:
                                         positionGain=KP,  # KP
                                         velocityGain=KD,  # KD
                                         force=1000,
+                                        physicsClientId=self.id_client
                                         )
                 # 确保每次更新都伴随物理计算
 
-            p.stepSimulation()
+            p.stepSimulation(physicsClientId=self.id_client)
             # 控制更新频率
             time.sleep(sleep_time)
 
@@ -652,8 +653,8 @@ class Robot:
     def calc_path_joints(self,current_pos,current_ori,target_pos,target_ori,start=None,scale=1):
         joint_lists = []
         if not current_pos:
-            current_pos = list(p.getLinkState(self.id_robot, self.id_end_effector)[4])
-            current_ori = list(p.getLinkState(self.id_robot, self.id_end_effector)[5])
+            current_pos = list(p.getLinkState(self.id_robot, self.id_end_effector,physicsClientId=self.id_client)[4])
+            current_ori = list(p.getLinkState(self.id_robot, self.id_end_effector,physicsClientId=self.id_client)[5])
         joint_list1 = list(self.get_state_from_ik(current_pos, current_ori,start=None))
         joint_list2= list(self.get_state_from_ik(target_pos,target_ori,start=start))
         joint_lists.append(joint_list1)
@@ -784,6 +785,7 @@ class Robot:
                 p.POSITION_CONTROL, targetPosition=joint_positions[i],force=force,
                 targetVelocity=0, maxVelocity=maxVelocity,
                 positionGain=0.5, velocityGain=0.5,
+                physicsClientId=self.id_client
             )
         return "Robot moved successfully"
 
@@ -800,6 +802,7 @@ class Robot:
                 targetVelocity=0, maxVelocity=maxVelocity,
                 positionGain=0.5, velocityGain=0.5,
                 physicsClientId=self.id_client,
+
             )
 
         if timeout>=0:
