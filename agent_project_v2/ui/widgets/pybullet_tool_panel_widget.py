@@ -1,11 +1,13 @@
 import json
 
-from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread, QTimer, QSize
-
+from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread, QTimer, QSize, QPoint
+import os
+from xml.etree import ElementTree as ET
 
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QLabel,
                              QLineEdit, QSizePolicy, QGroupBox, QLayout, QApplication, QSpacerItem, QFormLayout,
-                             QButtonGroup, QToolButton, QFrame,QHeaderView, QTableWidget, QTableWidgetItem
+                             QButtonGroup, QToolButton, QFrame,QHeaderView, QTableWidget, QTableWidgetItem, QFileDialog,
+                             QAction, QMenu
                              )
 from PyQt5.QtGui import QIcon,QPixmap
 
@@ -710,6 +712,9 @@ class PathToolPage(QWidget):
         self.paths_table.itemClicked.connect(self.on_path_item_clicked)
         # 双击：打开 PathDataDialog 查看数据
         self.paths_table.itemDoubleClicked.connect(self.on_path_item_double_clicked)
+        # 启用自定义右键菜单
+        self.paths_table.setContextMenuPolicy(Qt.CustomContextMenu)
+        self.paths_table.customContextMenuRequested.connect(self.on_paths_table_context_menu)
 
         parent_layout.addWidget(self.paths_table)
 
@@ -914,6 +919,84 @@ class PathToolPage(QWidget):
 
         # 为防止被 GC 回收，保留引用
         self._last_data_dialog = dlg
+
+
+    def on_paths_table_context_menu(self, pos: QPoint):
+        """路径表右键菜单：Remove / Save to XML"""
+        index = self.paths_table.indexAt(pos)
+        if not index.isValid():
+            return
+
+        row = index.row()
+        name_item = self.paths_table.item(row, 0)
+        if not name_item:
+            return
+        name = name_item.text()
+
+        menu = QMenu(self)
+
+        act_remove = QAction("Remove", self)
+        act_export = QAction("Save to XML...", self)
+
+        menu.addAction(act_remove)
+        menu.addAction(act_export)
+
+        action = menu.exec_(self.paths_table.viewport().mapToGlobal(pos))
+        if action is None:
+            return
+
+        if action == act_remove:
+            self._remove_path(name, row)
+        elif action == act_export:
+            self._export_path_to_xml(name)
+
+    def _remove_path(self, name: str, row: int):
+        """从表格 & 字典中删除路径"""
+        # 删表格行
+        self.paths_table.removeRow(row)
+        # 删数据
+        if name in self.paths_dict:
+            del self.paths_dict[name]
+        # 如果当前选中正好是它，清空 current_path_name
+        if self.current_path_name == name:
+            self.current_path_name = None
+        print(f"[PathToolPage] removed path: {name}")
+
+    def _export_path_to_xml(self, name: str):
+        """将指定路径保存为 XML 文件"""
+        path = self.paths_dict.get(name)
+        if not path:
+            print(f"[PathToolPage] no path data to export for: {name}")
+            return
+
+        # 你可以改成自己的默认目录
+        default_dir = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/assets/datas/test_datas"
+        default_name = f"{name}.xml"
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Path as XML",
+            os.path.join(default_dir, default_name),
+            "XML files (*.xml)"
+        )
+        if not filename:
+            return
+
+        # 按你之前的格式写 XML：
+        # <RobotPath>
+        #   <Point id="1">
+        #       <Joint1>...</Joint1> ...
+        #   </Point>
+        root = ET.Element("RobotPath")
+        for idx, joints in enumerate(path, start=1):
+            point_elem = ET.SubElement(root, "Point", id=str(idx))
+            for j_idx, val in enumerate(joints, start=1):
+                joint_elem = ET.SubElement(point_elem, f"Joint{j_idx}")
+                joint_elem.text = str(val)
+
+        tree = ET.ElementTree(root)
+        tree.write(filename, encoding="utf-8", xml_declaration=True)
+        print(f"[PathToolPage] path '{name}' exported to: {filename}")
+
 
 
     def on_execute_clicked(self):

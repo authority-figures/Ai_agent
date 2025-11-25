@@ -5,6 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import logging
 from api.routers.graph_info import router as graph_router
 from api.routers.task_info import router as task_router
+from api.routers.data_info import router as data_router
 from api.routers import plan_info
 from api.routers import executor_info
 from api.routers import graph_info
@@ -37,6 +38,7 @@ app.add_middleware(
 # 包含 API 路由
 app.include_router(graph_router)   # 注册图结构相关的路由
 app.include_router(task_router)    # 注册任务相关的路由
+app.include_router(data_router)    # 注册数据路径相关的路由
 
 # 定义全局变量来存储PyBullet仿真进程
 pybullet_proc = None

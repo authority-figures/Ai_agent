@@ -5,6 +5,7 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QFormLayout, QHeaderView, QDialog, QTableWidget, QTableWidgetItem,QMessageBox, QInputDialog,
     QLabel, QDoubleSpinBox, QPushButton, QTextEdit, QRadioButton, QButtonGroup, QListWidget, QAction, QMenu, QFileDialog
 )
+from core.simulation_request import ExecutePathRequest
 from PyQt5.QtCore import Qt, QSize, QPoint
 from PyQt5.QtGui import QColor
 import asyncio
@@ -127,8 +128,11 @@ class RobotDebugWidget(QWidget):
         Vlayout1 = QVBoxLayout()
         self.showPathButton = QPushButton("Show Path Data")
         self.showPathButton.clicked.connect(self.show_selected_path)
+        self.execute_path_in_sim_button =QPushButton("Execute Path In Sim")
+        self.execute_path_in_sim_button.clicked.connect(self.on_execute_path_in_sim_button_clicked)
 
         Vlayout1.addWidget(self.showPathButton)
+        Vlayout1.addWidget(self.execute_path_in_sim_button)
         Hlayout.addLayout(Vlayout1)
         self.remove_path_action = QAction('Remove')
         self.pathsListWidget.setContextMenuPolicy(Qt.CustomContextMenu)
@@ -264,6 +268,42 @@ class RobotDebugWidget(QWidget):
             # Create and show the dialog
             dialog = PathDataDialog(path_data, path_name, self.sim_view, self)
             dialog.show()
+
+    def on_execute_path_in_sim_button_clicked(self):
+        selected_item = self.pathsListWidget.currentItem()
+        if selected_item:
+            path_name = selected_item.text()
+            path_data = self.paths_dict[path_name]  # list
+            # Create and show the dialog
+            request = ExecutePathRequest(
+                joints_list=path_data,
+            )
+            future = asyncio.run_coroutine_threadsafe(
+                self.sim_view.pybullet_process.env.execute_path(request),
+                self.sim_view.env_loop)
+
+            # 修改plan按钮的颜色为黄色，表示正在规划中
+            self.execute_path_in_sim_button.setStyleSheet("background-color: yellow")
+            self.execute_path_in_sim_button.setText("Executing...")
+            self.execute_path_in_sim_button.setEnabled(False)
+
+            # 注册连接完成后的回调函数（关键：通过回调处理结果）
+            future.add_done_callback(lambda f: self.on_execute_done(f))
+        ...
+
+    def on_execute_done(self, future):
+        try:
+            result = future.result()
+            print("[RobotDebugWidget] Path execution completed with result:", result)
+            logging.info(f"[RobotDebugWidget] Path execution completed with result: {result}")
+        except Exception as e:
+            print(f"[RobotDebugWidget] Error during path execution: {e}")
+            logging.error(f"[RobotDebugWidget] Error during path execution: {e}")
+        finally:
+            # 恢复按钮状态
+            self.execute_path_in_sim_button.setStyleSheet("")
+            self.execute_path_in_sim_button.setText("Execute Path In Sim")
+            self.execute_path_in_sim_button.setEnabled(True)
 
     def import_xml(self):
         default_dir = '/home/lwh/Project/python_project/Ai_agent/agent_project_v2/assets/datas/test_datas'
