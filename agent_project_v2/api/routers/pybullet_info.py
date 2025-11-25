@@ -173,6 +173,8 @@ async def joint_move(request: JointMoveRequest):
         return {"status": "error", "message": str(e)}
 
 
+
+
 @app.post("/plan_path")
 async def plan_path(request: PathPlanRequest):
     """
@@ -352,7 +354,11 @@ class RobotStateManager:
         self.active_connections.append(websocket)
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        try:
+            self.active_connections.remove(websocket)
+        except ValueError:
+            # 说明这个 websocket 已经不在列表里了（可能之前断开时就删过）
+            print("[RobotStateManager] disconnect: websocket not in active_connections, ignore.")
 
     async def send_robot_state(self, data: dict):
         """ 向所有连接的客户端发送机械臂状态数据 """
@@ -373,10 +379,12 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         while True:
             # 接收客户端的消息（如果有）
-            await websocket.receive_text()
+            # await websocket.receive_text()
+            await asyncio.sleep(3600)   # 不期待客户端发消息的话，这样挂着就行.避免心跳得不到响应
     except WebSocketDisconnect:
         robot_state_manager.disconnect(websocket)
         print("Client disconnected")
+        print(f"Exception in websocket_endpoint:", WebSocketDisconnect)
 
 
 current_task = None
@@ -444,6 +452,8 @@ def run_pybullet_service():
                 reload=False,
                 log_level="info",
                 loop="asyncio",
+                ws_ping_interval=None,  # 关闭 WS 心跳
+                ws_ping_timeout=None,  # 或者给个很大的秒数，如 600
                 )  # 设置为8001端口运行
 
 if __name__ == "__main__":

@@ -64,7 +64,11 @@ class WebSocketClient(QThread):
         self.loop = loop or asyncio.new_event_loop()
     async def listen(self):
         uri = "ws://127.0.0.1:8001/ws/robotstate"
-        async with websockets.connect(uri) as websocket:
+        async with websockets.connect(
+                uri,
+                ping_interval=None,  # 不自动发 ping
+                ping_timeout=None,  # 不因 ping 超时断开
+        ) as websocket:
             print("[WebSocketClient] Connected to WebSocket:", uri)
             while True:
                 message = await websocket.recv()  # 接收消息
