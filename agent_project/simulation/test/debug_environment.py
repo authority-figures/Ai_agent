@@ -185,6 +185,7 @@ def debug_interpolate_joint_path():
         real_paths[f"point_{i}"] = sampled_path
 
 
+    print(paths)
     ori_path = paths[0]
     sampled_path = sim_env.interpolate_joint_path(ori_path, 1/240.,10)
 

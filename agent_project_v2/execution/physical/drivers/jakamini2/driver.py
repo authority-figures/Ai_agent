@@ -33,7 +33,7 @@ class Jakamini2Driver(RobotInterface):
 
 
     def init_sim(self):
-        robot_urdf = r"/home/lwh/Project/python_project/Ai_agent/agent_project_v2/assets/models/jaka_description/urdf/jaka_minicobo_with_rolling_tool.urdf"
+        robot_urdf = r"/home/lwh/Project/python_project/Ai_agent/agent_project_v2/assets/models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm.urdf"
 
         self.physics_client = p.connect(p.DIRECT)
         self.sim_robot = Robot(self.physics_client)
@@ -215,7 +215,16 @@ class Jakamini2Driver(RobotInterface):
         joint_positions 是关节位置
         speed, acc 是速度与加速度
         """
-        return await self.robot.joint_move_extend(joint_positions,move_mode,is_block, speed, acc,tol)
+        ret = await asyncio.to_thread(
+            self.robot.joint_move_extend,
+            joint_positions,
+            move_mode,
+            is_block,
+            speed,
+            acc,
+            tol
+        )
+        return ret
 
     async def servo_move_use_joint_NLF(self, max_vr=2, max_ar=2, max_jr=4):
         """
@@ -225,8 +234,24 @@ class Jakamini2Driver(RobotInterface):
         """
         if self.servo_enabled == True:
             raise Exception("Servo move is enabled. Please disable it first.")
+        ret = await asyncio.to_thread(self.robot.servo_move_use_joint_NLF,max_vr, max_ar, max_jr)
 
-        return await self.robot.servo_move_use_joint_NLF(max_vr, max_ar, max_jr)
+
+        return ret
+
+    async def servo_move_use_joint_LPF(self, cutoffFreq=0.5):
+        """
+        简单包装一下servo_move_use_joint_NLF。
+        joint_positions 是关节位置
+        speed, acc 是速度与加速度
+        """
+        if self.servo_enabled == True:
+            raise Exception("Servo move is enabled. Please disable it first.")
+        ret = await asyncio.to_thread(self.robot.servo_move_use_joint_LPF, cutoffFreq)
+
+        return ret
+
+
 
     async def servo_move_enable(self,enable):
         """
@@ -236,10 +261,14 @@ class Jakamini2Driver(RobotInterface):
         """
         if enable==True:
             self.servo_enabled = True
-            return await self.robot.servo_move_enable(enable)
+            ret = await asyncio.to_thread(self.robot.servo_move_enable,enable)
+            return ret
+
         else:
             self.servo_enabled = False
-            return await self.robot.servo_move_enable(enable)
+            ret = await asyncio.to_thread(self.robot.servo_move_enable,enable)
+            return ret
+
 
     async def servo_j(self, joint_pos, move_mode=0,step_num=1):
         """
@@ -251,7 +280,13 @@ class Jakamini2Driver(RobotInterface):
             await self.servo_move_enable(True)
             self.servo_enabled = True
 
-        return await self.robot.servo_j(joint_pos=joint_pos, move_mode=move_mode,step_num=step_num)
+        ret = await asyncio.to_thread(
+            self.robot.servo_j,
+            joint_pos=joint_pos,
+            move_mode=move_mode,
+            step_num=step_num
+        )
+        return ret
 
 
     def validate_joint_values(self, joint_pos):
@@ -290,6 +325,7 @@ class Jakamini2Driver(RobotInterface):
             if not self.validate_joint_values(joints):
                 raise Exception("Invalid joint values: {}".format(joints))
             await self.servo_j(joint_pos=joints, move_mode=0, step_num=step_num)
+            await asyncio.sleep(0.008)
 
         # 等待到达目标位置
         while True:
@@ -334,8 +370,65 @@ class Jakamini2Driver(RobotInterface):
         return False
 
 
+    async def run_nine_point_calibration_path(self,paths:dict=None,use_camera=True):
+        current_joints = await self.get_joint_pos()
+        if current_joints is None:
+            raise Exception("获取关节位置失败")
+        if not np.allclose(current_joints, paths['point_0'][0], atol=0.001):
+            await self.joint_move(paths['point_0'][0])
+        point_data = {}
+        success_list = []
+        if paths:
+            for id,key in enumerate(paths.keys()):
+                path = paths[key]
+                await self.servo_move_enable(True)
+                await self.move_path(path)
+                await self.servo_move_enable(False)
+                if use_camera:
+                    time.sleep(1)
+                    ifsuccess = await self.use_camera(point_data,id)
+                    success_list.append(ifsuccess)
+                    cv2.destroyAllWindows()
+                time.sleep(2)
+
+            if use_camera:
+                self.calibration_data['point_data'] = point_data
+                K,D = self.camera.get_intrinsics()
+                self.calibration_data["camera_matrix"] = K
+                self.calibration_data['dist_coeffs'] = D
+                self.camera.release()
+                if not all(success_list):
+                    raise Exception("相机标定失败，请检查相机和标定板的状态。")
+                else:
+                    print("[INFO] 相机标定成功。")
+                    np.savez(f"/home/lwh/Project/python_project/Ai_agent/agent_project_v2/execution/physical/data/calibration_data.npz", **self.calibration_data)
+                    print("[INFO] 标定数据已保存。")
+        pass
+
+
+'''
+/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/path_files/滚压_path.npy
+初始姿态
+start [0.14192261229704023, 0.12777528184055628, -1.5362067689104764, 0.0007951065080360192, -1.733048469695333, -0.6433431903539001]
+装配调试中的叶片最上角
+[0.4879219885883196, -0.5562600932828626, -0.9357658112807045, 0.14464824871696938, -1.906429588556646, -0.2675356408611036]
+joints = np.load("/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/path_files/滚压_path.npy")
+joints[789] 是一个靠近最外面的点
+
+file_path = r'/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/path_files/滚压到位点_6061_C轴连续加工.cls'
+
+goto, origin_data = sim_env.rm_sys.read_cls_file(sim_env.robot_list[0], file_path, inverse=True)
+pos_list, ori_list = [], []
+for item in goto:
+    # 解包位置信息pos (X/Y/Z)
+    pos_list.append((item['X'], item['Y'], item['Z']))
+    # 解包姿态信息ori (x/y/z/w)
+    ori_list.append((item['O']['x'], item['O']['y'], item['O']['z'], item['O']['w']))
+'''
+
 if __name__ == '__main__':
     robot = Jakamini2Driver('192.168.100.20')
+    robot.init_sim()
     asyncio.run(robot.connect())
     pass
 

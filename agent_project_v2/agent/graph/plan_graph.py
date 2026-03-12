@@ -48,9 +48,9 @@ if __name__ == '__main__':
     import matplotlib.image as mpimg
     try:
         png_data = compiled_graph.get_graph().draw_mermaid_png()
-        with open("graph_visualization.jpg", "wb") as f:
+        with open("plan.jpg", "wb") as f:
             f.write(png_data)
-        img = mpimg.imread("graph_visualization.jpg")
+        img = mpimg.imread("plan.jpg")
         plt.imshow(img)
         plt.axis('off')  # 可选：关闭坐标轴显示
         plt.show()

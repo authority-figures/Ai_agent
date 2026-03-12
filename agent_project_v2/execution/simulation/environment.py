@@ -67,19 +67,19 @@ class SimulationEnvironment:
     def load_scene(self):
 
         workpiece_urdf = r"./models/6061_C_continue/urdf/6061_C_continue.urdf"
-        workpiece_urdf = r"./models/work_piece_dada/urdf/work_piece_dada.urdf"
+        # workpiece_urdf = r"./models/work_piece_dada/urdf/work_piece_dada.urdf"
         workpiece_urdf = os.path.join(self.base_path, workpiece_urdf)
         machine_file_name = r"./models/c501-simple.SLDASM/urdf/c501-simple.SLDASM.urdf"
         machine_file_name = os.path.join(self.base_path, machine_file_name)
         robot_urdf = r"./models/jaka_description/urdf/jaka_minicobo.urdf"
         robot_urdf = os.path.join(self.base_path, robot_urdf)
-        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool.urdf"
+        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm.urdf"
         robot_with_rolling_tool_urdf = os.path.join(self.base_path, robot_with_rolling_tool_urdf)
         machine = Machine(self.physics_client)
         self.machine = machine
         self.machine.load_urdf(fileName=machine_file_name, basePosition=(0, 0, 0), useFixedBase=1, flags=0, )
         self.object_list.append(self.machine.id_robot)
-        self.workpiece_pose = [0.0, 0.05, 0.1]
+        self.workpiece_pose = [0.0, 0.06, 0.04]
         orientation = [0.0, 0.0, 0.0]
         quaternion = p.getQuaternionFromEuler(orientation,physicsClientId=self.physics_client)
         self.workpiece_orientation = quaternion
@@ -87,8 +87,9 @@ class SimulationEnvironment:
                                                              orientation=orientation)
 
         # self.object_list.append(self.workpiece_id)
-        robot_id = self.load_robot(urdf_path=robot_with_rolling_tool_urdf, basePosition=(-0.15, -0.15, 0.7), baseOrientation=(0.7,0,0,0.7),useFixedBase=0,
-                            start=[0, 0, PI / 2, 0, 0, 0], )
+        robot_id = self.load_robot(urdf_path=robot_with_rolling_tool_urdf, basePosition=(-0.16, -0.15, 0.7),
+                                   baseOrientation=(0.7, 0, 0, 0.7), useFixedBase=0,
+                                   start=[0, 0, PI / 2, 0, 0, 0], )
         # 消除执行器于机械臂末端的碰撞
         p.setCollisionFilterPair(robot_id, robot_id, 5, 7, 0,physicsClientId=self.physics_client)
         p.setCollisionFilterPair(robot_id, robot_id, 5, 8, 0,physicsClientId=self.physics_client)

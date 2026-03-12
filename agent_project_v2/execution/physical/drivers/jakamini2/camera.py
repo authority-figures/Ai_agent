@@ -18,6 +18,7 @@ class RealSenseRGB:
         color_sensor = pipeline_profile.get_device().query_sensors()[1]  # color sensor
         color_sensor.set_option(rs.option.enable_auto_exposure, False)
         color_sensor.set_option(rs.option.exposure,300)  # 单位：微秒
+        # color_sensor.set_option(rs.option.exposure, 3000)  # 单位：微秒
         color_sensor.set_option(rs.option.gain, 0)  # 范围一般是 0~255
         # 设置锐化、对比度等
         color_sensor.set_option(rs.option.sharpness, 50)
@@ -98,19 +99,22 @@ class RealSenseRGB:
 
 if __name__ == "__main__":
     camera = RealSenseRGB()
-    camera.start()  # 显式启动
+    camera.start()
 
     try:
         while True:
             frame = camera.get_rgb_frame()
-            if frame is not None:
-                cv2.imshow("RGB", frame)
-                camera.detect_cirle(camera.get_rgb_frame())
-            if cv2.waitKey(1) & 0xFF == ord('d'):
-                camera.detect_cirle(camera.get_rgb_frame())
+            if frame is None:
+                continue
 
-            if cv2.waitKey(1) & 0xFF == ord('q'):
+            cv2.imshow("RGB", frame)
+
+            key = cv2.waitKey(1) & 0xFF
+            if key == ord('d'):
+                camera.detect_cirle(frame)
+            elif key == ord('q'):
                 break
+
     finally:
         camera.release()
         cv2.destroyAllWindows()

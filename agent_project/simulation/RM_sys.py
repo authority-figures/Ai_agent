@@ -381,7 +381,18 @@ class RM_sys:
         else:
             print("机械臂和工件的约束关系未建立")
         pass
-    def get_point_in_workpiece2world(self, pos, ori,inverse=False):
+    def get_point_in_workpiece2world(self, pos, ori,inverse=False,workpiece:Robot=None):
+        if workpiece:
+            workpiece_state = workpiece.show_link_sys(-1,0.1,1)
+            workpiece_pos = workpiece_state[0]
+            workpiece_ori = workpiece_state[1]
+            # 计算旋转矩阵
+            rotation_matrix = np.array(p.getMatrixFromQuaternion(workpiece_ori)).reshape(3, 3)
+            # 构建齐次变换矩阵
+            transform_matrix = np.eye(4)
+            transform_matrix[:3, :3] = rotation_matrix
+            transform_matrix[:3, 3] = workpiece_pos
+            self.T_workpiece2world = transform_matrix
         if self.T_workpiece2world is not None:
             if inverse==False:
                 rot = R.from_quat(ori).as_matrix()
@@ -534,6 +545,7 @@ class RM_sys:
         pattern = re.compile(r'GOTO/([\d\.\-]+),([\d\.\-]+),([\d\.\-]+),?([\d\.\-]*)?,?([\d\.\-]*)?,?([\d\.\-]*)?')
 
         result = []
+        origin_data = []
         last_data = [0, 0, 0, 1, 0, 0]
         for line in lines:
             match = pattern.match(line.strip())
@@ -550,9 +562,10 @@ class RM_sys:
                 # 计算四元数
                 quat = self.calculate_quaternion(i, j, k,inverse=inverse,only_inverse_direction=only_inverse_direction)
                 pos,ori = self.get_point_in_workpiece2robot([x/1000,y/1000,z/1000], [quat[1],quat[2],quat[3],quat[0],])
-                pos,ori = robot.calculate_ee_origin_from_target(pos, ori,
-                                                                   self.point_in_ee_frame,
-                                                                   self.robot_target_ori)
+                # pos,ori = robot.calculate_ee_origin_from_target(pos, ori,
+                #                                                    self.point_in_ee_frame,
+                #                                                    self.robot_target_ori)
+                origin_data.append(([x/1000,y/1000,z/1000], [quat[1],quat[2],quat[3],quat[0],]))
                 result.append({
                     'X': pos[0],
                     'Y': pos[1],
@@ -560,7 +573,7 @@ class RM_sys:
                     'O': {'x': ori[0], 'y': ori[1], 'z': ori[2],'w': ori[3], }
                 })
 
-        return result
+        return result,origin_data
     @staticmethod
     def calculate_quaternion(i, j, k,inverse=False,only_inverse_direction=False):
         """

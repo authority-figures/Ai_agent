@@ -3,6 +3,117 @@ import numpy as np
 from agent_project.simulation.environment import *
 from agent_project.simulation.calibrator import *
 
+class DebugEnvironment(SimulationEnvironment):
+    def __init__(self):
+        super().__init__()
+
+    def load_scene(self):
+        # self.base_path = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/execution/simulation"
+        workpiece_urdf = r"./models/6061_C_continue/urdf/6061_C_continue.urdf"
+        # workpiece_urdf = r"./models/work_piece_dada/urdf/work_piece_dada.urdf"
+        workpiece_urdf = os.path.join(self.base_path, workpiece_urdf)
+
+        machine_file_name = r"./models/c501-simple.SLDASM/urdf/c501-simple.SLDASM.urdf"
+        machine_file_name = os.path.join(self.base_path, machine_file_name)
+        robot_urdf = r"./models/jaka_description/urdf/jaka_minicobo.urdf"
+        robot_urdf = os.path.join(self.base_path, robot_urdf)
+        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool.urdf"
+        robot_with_rolling_tool_urdf = os.path.join(self.base_path, robot_with_rolling_tool_urdf)
+        machine = Machine(self.physics_client)
+        self.machine = machine
+        self.machine.load_urdf(fileName=machine_file_name, basePosition=(0, 0, 0), useFixedBase=1, flags=0, )
+        self.object_list.append(self.machine.id_robot)
+        self.workpiece_pose = [0.0, 0.06, 0.04]
+        orientation = [0.0, 0.0, 0.0]
+        quaternion = p.getQuaternionFromEuler(orientation, physicsClientId=self.physics_client)
+        self.workpiece_orientation = quaternion
+        self.workpiece_id = self.machine.add_workpiece_to_machine(workpiece_urdf, position=self.workpiece_pose,
+                                                                  orientation=orientation)
+
+        # self.object_list.append(self.workpiece_id)
+        robot_id = self.load_robot(urdf_path=robot_with_rolling_tool_urdf, basePosition=(-0.16, -0.15, 0.7), baseOrientation=(0.7,0,0,0.7),useFixedBase=0,
+                            start=[0, 0, PI / 2, 0, 0, 0], )
+        # 消除执行器于机械臂末端的碰撞
+        p.setCollisionFilterPair(robot_id, robot_id, 5, 7, 0, physicsClientId=self.physics_client)
+        p.setCollisionFilterPair(robot_id, robot_id, 5, 8, 0, physicsClientId=self.physics_client)
+        p.setCollisionFilterPair(robot_id, robot_id, 4, 8, 0, physicsClientId=self.physics_client)
+
+        # 设置机械臂-rolling_tools的tcp坐标
+        ee_pos, ee_orn = p.getLinkState(robot_id, 6, physicsClientId=self.physics_client)[4:6]
+        tcp_pos, tcp_orn = p.getLinkState(robot_id, 10, physicsClientId=self.physics_client)[4:6]
+        tcp_in_ee_matrix = self.robot_list[0].TAB_with_AinW_and_BinW(tcp_pos, tcp_orn, ee_pos, ee_orn)
+        self.robot_list[0].add_tcp("rolling_tool", tcp_in_ee_matrix)
+        ee_pos, ee_orn = p.getLinkState(robot_id, 6, physicsClientId=self.physics_client)[4:6]
+        tcp_pos, tcp_orn = p.getLinkState(robot_id, 7, physicsClientId=self.physics_client)[4:6]
+        tcp_in_ee_matrix = self.robot_list[0].TAB_with_AinW_and_BinW(tcp_pos, tcp_orn, ee_pos, ee_orn)
+        self.robot_list[0].add_tcp("rolling_tool_base", tcp_in_ee_matrix)
+
+        self.robot_list[0].inverse_mode = "body_sys"
+
+        # 加载物理相机
+        cam_urdf = "./models/camera/urdf/camera.urdf"
+        cam_urdf = os.path.join(self.base_path, cam_urdf)
+        self.camera = Robot(self.physics_client)
+        self.camera.load_urdf(fileName=cam_urdf, basePosition=(0.05, -0.10, 0.75),
+                              baseOrientation=p.getQuaternionFromEuler([PI/2, 0, 0]), useFixedBase=0)
+
+        # 配置系统
+        self.rm_sys = RM_sys(self.robot_list, self.physics_client)
+
+        # 绑定机床到机械臂
+        self.rm_sys.init_machine(self.machine, type='velocity')
+        self.rm_sys.create_constrain(self.machine, self.robot_list[0], parentPosition=[-0.2, +0.1, 0.08],
+                                     childOrientation=[0.7068252, 0, 0, 0.7073883]
+                                     , workpiece_pos=self.workpiece_pose, workpiece_ori=self.workpiece_orientation)
+        self.rm_sys.init_robot(self.robot_list[0])
+
+        # 加载标定板
+        board_urdf = "./models/calibration_board/urdf/calibration_board.urdf"
+        board_urdf = os.path.join(self.base_path, board_urdf)
+        self.board = Calibration_board(self.physics_client, board_urdf)
+        self.rm_sys.robot_list.append(self.board)
+        self.rm_sys.robot_list.append(self.machine.workpiece)
+        pos, ori = self.rm_sys.get_point_in_workpiece2world([0.05, -0.05, 0.12],
+                                                            p.getQuaternionFromEuler([0, 0, PI / 2],
+                                                                                     physicsClientId=self.physics_client))
+        self.board.reset_position_and_orientation(position=pos,
+                                                  orientation=ori)
+
+        # 绑定相机到机械臂
+        self.rm_sys.camera = self.camera
+        self.robot_list[0].id_end_effector = 7
+        self.camera_constraint = self.rm_sys.bind_cam2robot(self.robot_list[0], self.camera,
+                                                            pos_in_robot_end_link=[0, -0.05, -0.00358],
+                                                            pos_in_cam_base_link=[0, 0, 0],
+                                                            ori_in_cam_base_link=[-1.57, 0, 3.14])
+        self.rm_sys.create_virtual_cams(60)
+        # 设置机械臂-物理相机的tcp坐标
+        for _ in range(100):
+            self.step_simulation()
+        ee_pos, ee_orn = p.getLinkState(robot_id, 6, physicsClientId=self.physics_client)[4:6]
+        tcp_pos, tcp_orn = p.getLinkState(self.camera.id_robot, 3, physicsClientId=self.physics_client)[4:6]  # RGB_Link
+        tcp_in_ee_matrix = self.robot_list[0].TAB_with_AinW_and_BinW(tcp_pos, tcp_orn, ee_pos, ee_orn)
+        self.robot_list[0].add_tcp("RGB_camera", tcp_in_ee_matrix)
+
+        # setup pb_ompl
+        self.obstacles = []
+        # self.pb_ompl_interface = pb_ompl.PbOMPL(self.robot_list[0], self.obstacles)
+        self.pb_ompl_interface = taskspaceRRT.TaskSpaceRRT(self.robot_list[0], self.obstacles)
+        self.pb_ompl_interface.set_planner("RRT")
+        # self.obstacles.extend([self.workpiece_id, self.machine.id_robot])
+        self.obstacles.extend([self.machine.id_robot])
+        self.pb_ompl_interface.set_obstacles(self.obstacles)
+        # 消除ompl规划时link4与link8的碰撞
+        self.pb_ompl_interface.check_link_pairs.remove((4, 8))
+        self.pb_ompl_interface.check_link_pairs.remove((4, 9))
+
+        # 设置九点标定
+        self.calibration_pather = CalibrationPather(self.robot_list[0], self.pb_ompl_interface)
+        self.calibrator: HandEyeCalibrator | None = None
+
+        pass
+
+
 
 
 def use_real_cailbration():
@@ -50,7 +161,7 @@ def use_real_cailbration():
 
 def debug_full_cailbration():
     import time
-    sim_env = SimulationEnvironment()
+    sim_env = DebugEnvironment()
     sim_env.initialize()
     sim_env.load_scene()
 
@@ -94,7 +205,7 @@ def debug_full_cailbration():
     pos,ori = sim_env.rm_sys.get_point_in_workpiece2robot((0.0325+cam_dist, -0.072 + 0.0125, 0.05266 - 0.0125),
                                                 (0, 0.7071068, 0, -0.7071068))
     joints = sim_env.robot_list[0].get_state_from_ik(pos,ori,tcp_name="RGB_camera")
-    sim_env.modify_workpiece_constrain([+0.005,0.1,0.1],[0,0,0,1])
+    sim_env.modify_workpiece_constrain([+0.005,+0.02,0.1],[0,0,0,1])
     sim_env.ninePoints_calibration(joints)
     sim_env.update_workpiece2robotBy_calibration()
     sim_env.update_robot_constrain()
@@ -128,20 +239,26 @@ def debug_full_cailbration():
 
 def debug_interpolate_joint_path():
     import time
-    sim_env = SimulationEnvironment()
+    sim_env = DebugEnvironment()
     sim_env.initialize()
     sim_env.load_scene()
 
     target_j = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -0.7582]
 
-    start = [3.4, 0, 0, 0, 0, 0, ]
+    start = [0.13071530334162695,
+ -0.7506470151569903,
+ -0.9570776730115172,
+ 0.2982355715457887,
+ -1.414223316598073,
+ -0.832164446019116]
     # start = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098+1.57, -0.7582-1.01229]
     goal = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -0.7582 - 1.01229]  # 关节六于之前定义的0位置之间的偏差为现0=原0-1.01229
     goal = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -1.77049]
     # 设置机械臂/机床的初始位置
     sim_env.robot_list[0].set_state(start)
     sim_env.robot_list[0].set_joints_states(start)
-    sim_env.rm_sys.init_machine(sim_env.machine, 'pos', [0.0, -0.0, 0.5, 0.4, 0.00, 0])
+    time.sleep(2)
+    sim_env.rm_sys.init_machine(sim_env.machine, 'pos', [0.0, -0.0, 0.5, -0.4, 0.00, 0])
     sim_env.pb_ompl_interface.set_planner("RRTConnect")
 
     # # workpiece:C_continue
@@ -149,9 +266,14 @@ def debug_interpolate_joint_path():
     #                                     [0.0325, -0.072 + 0.0125, 0.05266 - 0.0125],
     #                                     childOrientation=p.getQuaternionFromEuler([0, 0, PI / 2]))
     # workpiece:dada
+    # # 标定板朝向世界坐标系的y轴负方向
+    # sim_env.rm_sys.bind_board2workpiece(sim_env.machine.workpiece, sim_env.board,
+    #                                     [0.03- 0.0125, -0.072-0.0025 , 0.05266 - 0.0125],
+    #                                     childOrientation=p.getQuaternionFromEuler([0, 0, 0]))
+    # 标定板朝向世界坐标系的z轴正方向
     sim_env.rm_sys.bind_board2workpiece(sim_env.machine.workpiece, sim_env.board,
-                                        [0.02, -0.06 + 0.0125, 0.05 - 0.0125],
-                                        childOrientation=p.getQuaternionFromEuler([0, 0, PI / 2]))
+                                        [0.03 + 0.148, -0.072 +0.0125, 0.04 + 0.0025],
+                                        childOrientation=p.getQuaternionFromEuler([-PI/2, 0, 0]))
 
     import threading
     def run_simulation():
@@ -174,22 +296,32 @@ def debug_interpolate_joint_path():
 
     sim_env.running = False
     cam_dist = 0.08
-    pos, ori = sim_env.rm_sys.get_point_in_workpiece2robot((0.02 + cam_dist, -0.06 + 0.0125, 0.05 - 0.0125),
-                                                           (0, 0.7071068, 0, -0.7071068))
+    # pos, ori = sim_env.rm_sys.get_point_in_workpiece2robot((0.02 + cam_dist, -0.06 + 0.0125, 0.05 - 0.0125),
+    #                                                        (0, 0.7071068, 0, -0.7071068))
+
+    # # 标定板朝向世界坐标系的Z轴正方向
+    pos, ori = sim_env.rm_sys.get_point_in_workpiece2robot((0.03 + 0.148 , -0.072 +0.0125, 0.05266 - 0.0125 + cam_dist),
+                                                           [ 0, 1, 0, 0 ])
+
+    p.setCollisionFilterPair(sim_env.robot_list[0].id_robot, sim_env.workpiece_id, 1, -1, 0, physicsClientId=sim_env.physics_client)
+    p.setCollisionFilterPair(sim_env.robot_list[0].id_robot, sim_env.workpiece_id, 2, -1, 0, physicsClientId=sim_env.physics_client)
+    p.setCollisionFilterPair(sim_env.robot_list[0].id_robot, sim_env.workpiece_id, 3, -1, 0, physicsClientId=sim_env.physics_client)
+    p.setCollisionFilterPair(sim_env.robot_list[0].id_robot, sim_env.workpiece_id, 4, -1, 0, physicsClientId=sim_env.physics_client)
+
     sim_env.calibration_pather.set_center(pos, ori)
-    paths = sim_env.calibration_pather.generate_calibration_points(0.02, 8,start=[3.4,0,0,0,0,0])
+    paths = sim_env.calibration_pather.generate_calibration_points(0.01, 10,start=None)
     real_paths = {}
     for i, path in enumerate(paths.values()):
         total_time = 10 if i==0 else 1
         sampled_path = sim_env.interpolate_joint_path(path, 0.008, total_time)
         real_paths[f"point_{i}"] = sampled_path
 
-
+    print(paths)
     ori_path = paths[0]
     sampled_path = sim_env.interpolate_joint_path(ori_path, 1/240.,10)
 
-    # np.savez("test_data/interpolate_path_005.npz", **real_paths)
-    # print('save success')
+    np.savez("test_data/interpolate_path_005.npz", **real_paths)
+    print('save success')
     sim_env.camera_open=False
     sim_env.running = True
     for i, path in enumerate(paths.values()):
@@ -206,14 +338,20 @@ def debug_interpolate_joint_path():
 
 def debug_cailbration():
     import time
-    sim_env = SimulationEnvironment()
+    sim_env = DebugEnvironment()
     sim_env.initialize()
     sim_env.load_scene()
 
 
     target_j = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -0.7582]
 
-    start = [1.57, 0, 1, 0, 0, 0, ]
+    start = [-4.090332355263422,
+             -0.9639542299578412,
+             2.0127570095115703,
+             4.388834944679336,
+             -1.0672680283403375,
+             -0.20340011477907788]
+
     # start = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098+1.57, -0.7582-1.01229]
     goal = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -0.7582 - 1.01229]  # 关节六于之前定义的0位置之间的偏差为现0=原0-1.01229
     goal = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -1.77049]
@@ -222,18 +360,31 @@ def debug_cailbration():
     sim_env.robot_list[0].set_joints_states(start)
     sim_env.rm_sys.init_machine(sim_env.machine, 'pos', [0.0, -0.0, 0.5, 0.4, -0.2, 0])
     sim_env.pb_ompl_interface.set_planner("RRTConnect")
+    # sim_env.rm_sys.bind_board2workpiece(sim_env.machine.workpiece, sim_env.board,
+    #                                     [0.0325, -0.072 + 0.0125, 0.05266 - 0.0125],
+    #                                     childOrientation=p.getQuaternionFromEuler([0, 0, PI / 2]))
+    # 标定板朝向世界坐标系的y轴负方向
     sim_env.rm_sys.bind_board2workpiece(sim_env.machine.workpiece, sim_env.board,
-                                        [0.0325, -0.072 + 0.0125, 0.05266 - 0.0125],
-                                        childOrientation=p.getQuaternionFromEuler([0, 0, PI / 2]))
+                                        [0.03- 0.0125, -0.072-0.0025 , 0.05266 - 0.0125],
+                                        childOrientation=p.getQuaternionFromEuler([0, 0, 0]))
+
+
     calibration_pather = CalibrationPather(sim_env.robot_list[0], sim_env.pb_ompl_interface)
 
-    sim_env.running = True
+    sim_env.running = Truecam_dist = 0.08
     cam_dist = 0.08
-    pos, ori = sim_env.rm_sys.get_point_in_workpiece2robot((0.0325 + cam_dist, -0.072 + 0.0125, 0.05266 - 0.0125),
-                                                           (0, 0.7071068, 0, -0.7071068))
+    cam_dist = 0.3
+    # pos, ori = sim_env.rm_sys.get_point_in_workpiece2robot((0.0325 + cam_dist, -0.072 + 0.0125, 0.05266 - 0.0125),
+    #                                                        (0, 0.7071068, 0, -0.7071068))
+
+    # # 标定板朝向世界坐标系的y轴负方向
+    pos, ori = sim_env.rm_sys.get_point_in_workpiece2robot((0.03 - 0.0125 , -0.072-0.0025- cam_dist, 0.05266 - 0.0125),
+                                                           [ -0.5, -0.5, -0.5, 0.5 ])
 
     calibration_pather.set_center(pos, ori)
-    paths = calibration_pather.generate_calibration_points(0.01,10)
+    paths = calibration_pather.generate_calibration_points(0.005,10,start=start)
+
+
 
 
 
@@ -307,12 +458,22 @@ def debug_cailbration():
 
 def debug_board():
     import time
-    sim_env = SimulationEnvironment()
+    sim_env = DebugEnvironment()
     sim_env.initialize()
     sim_env.load_scene()
 
-    sim_env.rm_sys.bind_board2workpiece(sim_env.machine.workpiece, sim_env.board, [0.0325, -0.072+0.0125, 0.05266-0.0125],
-                                        childOrientation=p.getQuaternionFromEuler([0, 0, PI/2]))
+    # sim_env.rm_sys.bind_board2workpiece(sim_env.machine.workpiece, sim_env.board, [0.0325, -0.072+0.0125, 0.05266-0.0125],
+    #                                     childOrientation=p.getQuaternionFromEuler([0, 0, PI/2]))
+    # # 标定板朝向世界坐标系的y轴负方向
+    # sim_env.rm_sys.bind_board2workpiece(sim_env.machine.workpiece, sim_env.board,
+    #                                     [0.03- 0.0125, -0.072-0.0025 , 0.05266 - 0.0125],
+    #                                     childOrientation=p.getQuaternionFromEuler([0, 0, 0]))
+
+    # 标定板朝向世界坐标系的z轴正方向
+    sim_env.rm_sys.bind_board2workpiece(sim_env.machine.workpiece, sim_env.board,
+                                        [0.03 + 0.148, -0.072 + 0.0125, 0.04 + 0.0025],
+                                        childOrientation=p.getQuaternionFromEuler([-PI/2,  0,0]))
+
 
     import threading
     def run_simulation():

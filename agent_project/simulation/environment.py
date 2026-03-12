@@ -319,7 +319,7 @@ class SimulationEnvironment:
         # 进行采样
         pos, ori = self.robot_list[0].get_pos_ori_from_ik(center_joints, tcp_name="RGB_camera")
         self.calibration_pather.set_center(pos, ori)
-        paths = self.calibration_pather.generate_calibration_points(0.01, 10)
+        paths = self.calibration_pather.generate_calibration_points(0.005, 10)
         calibration_data = {}
         calibration_data["camera_matrix"] = self.rm_sys.RGB_camera.get_pybullet_camera_K()
         point_data = {}

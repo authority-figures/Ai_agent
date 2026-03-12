@@ -201,6 +201,168 @@ class RobotServer:
                     print("[INFO] 标定数据已保存。")
         pass
 
+    import cv2
+    import time
+    import numpy as np
+
+    def preview_camera_until_confirm(self,
+                                     window_name="Calibration Preview",
+                                     pattern_size=(7, 7),
+                                     require_detection=True):
+        """
+        持续显示 RealSense 视频，拖拽机械臂到位后按键确认。
+
+        按键:
+            Space / Enter / s : 记录当前点
+            q / Esc           : 退出标定
+
+        参数:
+            pattern_size: 圆点标定板规格
+            require_detection:
+                True  -> 只有检测到圆点板才允许记录
+                False -> 不强制检测到也可以记录
+
+        返回:
+            (True, frame)  -> 用户确认，返回当前帧
+            (False, None)  -> 用户取消
+        """
+
+        print("[INFO] 拖拽机械臂到目标点后，按 Space/Enter/S 记录，按 Q/Esc 退出。")
+
+        flags = cv2.CALIB_CB_SYMMETRIC_GRID
+
+        while True:
+            frame = self.camera.get_rgb_frame()
+            if frame is None:
+                print("[WARN] 无法获取相机图像，重试中...")
+                time.sleep(0.05)
+                continue
+
+            vis_frame = frame.copy()
+
+            # 圆点板检测
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            found, centers = cv2.findCirclesGrid(gray, pattern_size, flags=flags)
+
+            if found:
+                vis_frame = cv2.drawChessboardCorners(vis_frame, pattern_size, centers, found)
+                status_text = "[OK] Circles grid detected"
+            else:
+                status_text = "[X] Circles grid not found"
+
+            # 叠加提示文字
+            cv2.putText(
+                vis_frame,
+                "Drag robot to target point",
+                (20, 35),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.9,
+                (0, 255, 0),
+                2
+            )
+            cv2.putText(
+                vis_frame,
+                "Press Space/Enter/S to record | Q/Esc to quit",
+                (20, 75),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 255),
+                2
+            )
+            cv2.putText(
+                vis_frame,
+                status_text,
+                (20, 115),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.8,
+                (0, 255, 0) if found else (0, 0, 255),
+                2
+            )
+
+            cv2.imshow(window_name, vis_frame)
+
+            key = cv2.waitKey(1) & 0xFF
+
+            # 确认记录
+            if key in (32, 13, 10, ord('s'), ord('S')):
+                if require_detection and not found:
+                    print("[WARN] 当前未检测到圆点标定板，不能记录该点。")
+                    continue
+
+                print("[INFO] 已确认当前点。")
+                return True, frame
+
+            # 退出
+            elif key in (27, ord('q'), ord('Q')):
+                print("[INFO] 用户取消标定。")
+                return False, None
+
+    def run_nine_point_calibration_manual(self, point_names=None, use_camera=True):
+        point_data = {}
+        robot_point_data = {}
+        success_list = []
+
+        if point_names is None:
+            point_names = [f"point_{i + 1}" for i in range(9)]
+
+        try:
+            print("[INFO] 开始手动九点标定。")
+
+            # 这里按你的机器人实际情况处理：
+            # 如果有拖拽示教模式，建议用拖拽示教模式，而不是单纯 servo off
+            self.servo_move_enable(False)
+
+            for idx, name in enumerate(point_names):
+                print(f"\n[INFO] 当前点: {name}")
+
+                if use_camera:
+                    confirmed = self.preview_camera_until_confirm(window_name="Calibration Preview")
+                else:
+                    confirmed = input(f"请拖拽到 {name}，到位后按回车记录，输入 q 退出: ").strip().lower() != 'q'
+
+                if not confirmed:
+                    raise Exception("用户主动终止标定。")
+
+                # ===== 记录当前机械臂位姿 =====
+                # 替换成你真实的机器人取位姿接口
+                current_pose = self.get_joints()
+                robot_point_data[name] = current_pose
+                print(f"[INFO] 已记录机械臂位姿: {current_pose}")
+
+                # ===== 记录当前图像标定点 =====
+                if use_camera:
+                    # 这里 use_camera() 如果它内部会重新取一帧，是没问题的
+                    # 如果你想用“预览画面的当前帧”做标定，也可以再改
+                    ifsuccess = self.use_camera(point_data, idx)
+                    success_list.append(ifsuccess)
+                    print(f"[INFO] 第 {idx + 1} 个点图像采集结果: {ifsuccess}")
+
+                time.sleep(0.3)
+
+            self.calibration_data["robot_point_data"] = robot_point_data
+
+            if use_camera:
+                self.calibration_data["point_data"] = point_data
+                K, D = self.camera.get_intrinsics()
+                self.calibration_data["camera_matrix"] = K
+                self.calibration_data["dist_coeffs"] = D
+
+                if not all(success_list):
+                    raise Exception("相机标定失败，请检查相机和标定板的状态。")
+
+                print("[INFO] 相机标定成功。")
+
+            np.savez(
+                "/home/lwh/Project/python_project/Ai_agent/agent_project/jaka_work_space/datas/calibration_data.npz",
+                **self.calibration_data
+            )
+            print("[INFO] 标定数据已保存。")
+
+        finally:
+            cv2.destroyAllWindows()
+            if use_camera:
+                self.camera.release()
+
     def use_camera(self,point_data:dict={},id:int=0):
         if not self.camera.started:
             self.camera.start()
@@ -267,11 +429,11 @@ if __name__ == '__main__':
     robot.login()
 
 
-    paths = np.load('/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_data/interpolate_path_005.npz')
+    paths = np.load('/home/lwh/Project/python_project/Ai_agent/agent_project_v2/execution/simulation/test/test_data/interpolate_path_005.npz')
     current_joints = robot.get_joints()
     cj = np.array(current_joints, dtype=np.float64)
     target = np.array(paths['point_0'][0], dtype=np.float64)
     if not np.allclose(current_joints, paths['point_0'][0], atol=0.001):
-        robot.move_path(paths['point_0'][::-1])
+        robot.joint_move(paths['point_0'][0])
     robot.run_nine_point_calibration_path(paths=paths,use_camera=True)
 

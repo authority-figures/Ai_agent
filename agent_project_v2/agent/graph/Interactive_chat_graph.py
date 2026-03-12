@@ -43,6 +43,17 @@ if __name__ == '__main__':
     import matplotlib.image as mpimg
 
     try:
+        png_data = compiled_graph.get_graph().draw_mermaid_png()
+        with open("chat.jpg", "wb") as f:
+            f.write(png_data)
+        img = mpimg.imread("chat.jpg")
+        plt.imshow(img)
+        plt.axis('off')  # 可选：关闭坐标轴显示
+        plt.show()
+    except Exception as e:
+        print(f"显示图形时出错: {e}")
+
+    try:
         while True:
             result = compiled_graph.invoke({"messages": [],"AI_answer":""},config=session1_config)
             if result.get("input", "").strip().lower() in ["exit", "end", "quit"]:

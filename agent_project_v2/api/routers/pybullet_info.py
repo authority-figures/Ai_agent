@@ -228,11 +228,28 @@ async def execute_path(request: ExecutePathRequest):
             return {"status": "error", "message": "No robot loaded"}
         if sim_env.pb_ompl_interface:
             sim_env.pb_ompl_interface.execute(request.joints_list, dynamics=request.dynamics)
+
+        sim_env.update_workpiece2robotBy_calibration()
+        sim_env.update_robot_constrain()
+        sim_env.update_camera_constrain()
         return {"status": "success", "message": "Path executed"}
     except Exception as e:
         print("[execution:simulation:api:execute_path] Error executing path:", e)
         return {"status": "error", "message": str(e)}
 
+
+@app.post("/update_env_by_calibration")
+async def update_env_by_calibration(request: ExecutePathRequest):
+    """ API: 执行路径 """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        if sim_env.pb_ompl_interface:
+            sim_env.pb_ompl_interface.execute(request.joints_list, dynamics=request.dynamics)
+        return {"status": "success", "message": "Path executed"}
+    except Exception as e:
+        print("[execution:simulation:api:execute_path] Error executing path:", e)
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/create_cube")

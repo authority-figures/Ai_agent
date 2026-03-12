@@ -26,12 +26,12 @@
         rpy="0 0 0" />
       <geometry>
         <mesh
-          filename="package://6061_C_continue/meshes/base_link.STL" />
+          filename="package://6061_C_continue/meshes/base_link_new.STL" />
       </geometry>
       <material
         name="base">
         <color
-          rgba="0.8 0.8 0.1 1" />
+          rgba="0.8 0.8 0.1 0.5" />
       </material>
     </visual>
     <collision>
@@ -71,19 +71,9 @@
       <material
         name="Link_1">
         <color
-          rgba="0.7 0.6 0.2 0.8" />
+          rgba="0.7 0.6 0.2 0.1" />
       </material>
     </visual>
-    <collision>
-      <origin
-        xyz="0 0 0"
-        rpy="0 0 0" />
-      <geometry>
-      <!-- 使用baselink碰撞体代替link1 -->
-        <mesh
-          filename="package://6061_C_continue/meshes/base_link.obj" />
-      </geometry>
-    </collision>
   </link>
   <joint
     name="joint_1"

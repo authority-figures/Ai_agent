@@ -56,12 +56,28 @@ if __name__ == '__main__':
     import matplotlib.image as mpimg
     try:
         png_data = compiled_graph.get_graph().draw_mermaid_png()
-        with open("graph_visualization.jpg", "wb") as f:
+        with open("exec.jpg", "wb") as f:
             f.write(png_data)
-        img = mpimg.imread("graph_visualization.jpg")
+        img = mpimg.imread("exec.jpg")
         plt.imshow(img)
         plt.axis('off')  # 可选：关闭坐标轴显示
         plt.show()
+
+        # png_data = compiled_graph.get_graph().draw_mermaid_png()
+        #
+        # img = mpimg.imread(io.BytesIO(png_data))  # 直接从内存读，不用先写文件
+        #
+        # plt.figure(dpi=2000)  # 这行可选：设置显示/保存用的默认dpi
+        # plt.imshow(img)
+        # plt.axis("off")
+        #
+        # plt.savefig(
+        #     "graph_visualization.png",
+        #     dpi=2000,  # 关键：指定dpi
+        #     bbox_inches="tight",
+        #     pad_inches=0
+        # )
+        # plt.close()
     except Exception as e:
         print(f"显示图形时出错: {e}")
 
