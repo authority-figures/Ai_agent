@@ -174,13 +174,12 @@ class CustomDigitalTwinEnv:
             else:
                 return {"status": "error", "message": "Failed to show axis"}
 
-    async def subscribe_robot_state(self, on_subscribe):
+    async def subscribe_machine_state(self, on_subscribe):
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{self.base_url}/publish_robot_state", json={"on_subscribe": on_subscribe})
+            response = await client.post(f"{self.base_url}/publish_machine_state", json={"on_subscribe": on_subscribe})
             if response.status_code == 200:
                 return response.json()
-            else:
-                return {"status": "error", "message": "Failed to subscribe_robot_state"}
+            return {"status": "error", "message": "Failed to subscribe_machine_state"}
 
     async def get_machine_axis_state(self):
         async with httpx.AsyncClient() as client:
@@ -192,16 +191,14 @@ class CustomDigitalTwinEnv:
     async def update_machine_axis_state(self, axis_values, maxVelocity=1):
         request = MachineAxisRequest(target_axis_values=axis_values, maxVelocity=maxVelocity)
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{self.base_url}/update_machine_axis_state", json=request.to_dict(),
-                                         timeout=10)
+            response = await client.post(f"{self.base_url}/update_machine_axis_state", json=request.to_dict(), timeout=10)
             if response.status_code == 200:
                 return response.json()
             return {"status": "error", "message": "Failed to update_machine_axis_state"}
 
     async def start_machine_axis_tcp_server(self, host="127.0.0.1", port=9101):
         async with httpx.AsyncClient() as client:
-            response = await client.post(f"{self.base_url}/start_machine_axis_tcp_server",
-                                         json={"host": host, "port": port})
+            response = await client.post(f"{self.base_url}/start_machine_axis_tcp_server", json={"host": host, "port": port})
             if response.status_code == 200:
                 return response.json()
             return {"status": "error", "message": "Failed to start_machine_axis_tcp_server"}
@@ -212,4 +209,5 @@ class CustomDigitalTwinEnv:
             if response.status_code == 200:
                 return response.json()
             return {"status": "error", "message": "Failed to stop_machine_axis_tcp_server"}
+
 

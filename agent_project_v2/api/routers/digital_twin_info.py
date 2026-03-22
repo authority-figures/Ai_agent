@@ -528,6 +528,90 @@ async def publish_robot_state(request: dict):
 
 
 
+class MachineStateManager:
+    def __init__(self):
+        self.active_connections: List[WebSocket] = []
+
+    async def connect(self, websocket: WebSocket):
+        await websocket.accept()
+        self.active_connections.append(websocket)
+
+    def disconnect(self, websocket: WebSocket):
+        try:
+            self.active_connections.remove(websocket)
+        except ValueError:
+            print("[DT MachineStateManager] disconnect: websocket not in active_connections, ignore.")
+
+    async def send_machine_state(self, data: dict):
+        for connection in self.active_connections:
+            try:
+                await connection.send_json(data)
+            except WebSocketDisconnect:
+                self.active_connections.remove(connection)
+
+
+machine_state_manager = MachineStateManager()
+
+
+@app.websocket("/ws/machinestate")
+async def machine_websocket_endpoint(websocket: WebSocket):
+    """WebSocket 路由，用于订阅数字孪生机床状态信息。"""
+    await machine_state_manager.connect(websocket)
+    try:
+        while True:
+            await asyncio.sleep(3600)
+    except WebSocketDisconnect:
+        machine_state_manager.disconnect(websocket)
+        print("DT machine state client disconnected")
+
+
+current_machine_task = None
+
+
+@app.post("/publish_machine_state")
+async def publish_machine_state(request: dict):
+    """用于发布数字孪生机床状态信息，推送到所有连接的客户端。"""
+    try:
+        global current_machine_task
+        on_pub = request.get("on_subscribe", True)
+
+        async def pub_machine_state():
+            while True:
+                try:
+                    await asyncio.sleep(0.1)
+                    if not hasattr(DT_env, "machine") or DT_env.machine is None:
+                        continue
+                    axis_values = DT_env.machine.get_joints_states()
+                    machine_state = {
+                        "status": "success",
+                        "axis_labels": ["A", "C", "X", "Y", "Z"],
+                        "axis_values": list(axis_values),
+                    }
+                    await machine_state_manager.send_machine_state(machine_state)
+                except asyncio.CancelledError:
+                    print("DT machine state publishing task was cancelled.")
+                    break
+
+        if on_pub:
+            if current_machine_task and not current_machine_task.done():
+                current_machine_task.cancel()
+                print("Previous DT machine state task cancelled.")
+
+            current_machine_task = asyncio.create_task(pub_machine_state())
+            return {"status": "success", "message": "DT machine state publishing started"}
+
+        if current_machine_task and not current_machine_task.done():
+            current_machine_task.cancel()
+            await current_machine_task
+            return {"status": "success", "message": "DT machine state publishing canceled"}
+
+        return {"status": "error", "message": "No active DT machine state task to cancel"}
+
+    except Exception as e:
+        print("[execution:digital_twin:api:publish_machine_state] Error publishing machine state:", e)
+        return {"status": "error", "message": str(e)}
+
+
 
 
 

@@ -3,6 +3,7 @@
 import sys
 from PyQt5.QtWidgets import (
     QApplication, QMainWindow, QVBoxLayout, QWidget, QPushButton, QLabel, QLineEdit, QHBoxLayout, QGroupBox, QFormLayout, QComboBox
+, QGridLayout
 )
 from PyQt5.QtWidgets import QWidget, QVBoxLayout, QLabel, QSizePolicy
 from PyQt5.QtCore import Qt, QTimer, QObject, pyqtSignal, QThread
@@ -179,6 +180,8 @@ class DigitalTwinView(QWidget):
 
         self.create_status_display()
 
+        self.create_machine_tcp_group()
+
 
 
 
@@ -248,6 +251,52 @@ class DigitalTwinView(QWidget):
         # 初始状态下禁用电源和启用按钮
         self.power_button.setEnabled(False)
         self.enable_button.setEnabled(False)
+
+    def create_machine_tcp_group(self):
+        self.machine_tcp_groupbox = QGroupBox("Machine TCP Subscription")
+        self.machine_tcp_groupbox.setLayout(QFormLayout())
+
+        tcp_layout = QHBoxLayout()
+        self.machine_tcp_ip_input = QComboBox(self)
+        self.machine_tcp_ip_input.setEditable(True)
+        self.machine_tcp_ip_input.addItem("127.0.0.1")
+        self.machine_tcp_ip_input.addItem("0.0.0.0")
+        tcp_layout.addWidget(self.machine_tcp_ip_input)
+
+        self.machine_tcp_port_input = QLineEdit(self)
+        self.machine_tcp_port_input.setText("9101")
+        self.machine_tcp_port_input.setMaximumWidth(80)
+        tcp_layout.addWidget(self.machine_tcp_port_input)
+
+        self.machine_tcp_start_button = QPushButton("Start TCP", self)
+        self.machine_tcp_start_button.clicked.connect(self.start_machine_tcp_subscription)
+        tcp_layout.addWidget(self.machine_tcp_start_button)
+
+        self.machine_tcp_stop_button = QPushButton("Stop TCP", self)
+        self.machine_tcp_stop_button.clicked.connect(self.stop_machine_tcp_subscription)
+        self.machine_tcp_stop_button.setEnabled(False)
+        tcp_layout.addWidget(self.machine_tcp_stop_button)
+
+        self.machine_tcp_groupbox.layout().addRow("IP / Port:", tcp_layout)
+
+        self.machine_tcp_status_label = QLabel("TCP server not started")
+        self.machine_tcp_groupbox.layout().addRow("TCP Status:", self.machine_tcp_status_label)
+
+        axis_grid = QGridLayout()
+        self.machine_axis_labels = {}
+        for col, axis in enumerate(["A", "C", "X", "Y", "Z"]):
+            axis_grid.addWidget(QLabel(axis), 0, col)
+            value_label = QLabel("--")
+            value_label.setAlignment(Qt.AlignCenter)
+            value_label.setStyleSheet("border: 1px solid #ced4da; padding: 4px; background-color: #ffffff;")
+            self.machine_axis_labels[axis] = value_label
+            axis_grid.addWidget(value_label, 1, col)
+
+        axis_widget = QWidget(self)
+        axis_widget.setLayout(axis_grid)
+        self.machine_tcp_groupbox.layout().addRow("ACXYZ:", axis_widget)
+        self.layout().addWidget(self.machine_tcp_groupbox)
+
 
 
     def create_DT_Widget(self):
@@ -330,6 +379,12 @@ class DigitalTwinView(QWidget):
         self.status_listener.connection_established.connect(self.on_ws_connection_established)
 
 
+        self.machine_axis_listener = MachineAxisListener("ws://127.0.0.1:8003/ws/machinestate", self)
+        self.machine_axis_listener.axis_received.connect(self.update_machine_axis_labels)
+        self.machine_axis_listener.connection_lost.connect(self.on_machine_axis_connection_lost)
+        self.machine_axis_listener.connection_established.connect(self.on_machine_axis_connection_established)
+
+
 
     def update_robot_status_from_raw(self, raw_status):
         """
@@ -395,6 +450,72 @@ class DigitalTwinView(QWidget):
         print("[DT] WebSocket connection established")
         # 可以在 UI 上显示“已连接物理服务”
 
+    def update_machine_axis_labels(self, axis_values):
+        for axis, value in zip(["A", "C", "X", "Y", "Z"], axis_values):
+            label = self.machine_axis_labels.get(axis)
+            if label is not None:
+                label.setText(f"{float(value):.5f}")
+
+    def on_machine_axis_connection_lost(self, msg: str):
+        print("[DT] Machine axis WebSocket connection lost:", msg)
+        self.machine_tcp_status_label.setText(f"WS disconnected: {msg}")
+
+    def on_machine_axis_connection_established(self):
+        print("[DT] Machine axis WebSocket connection established")
+
+    def start_machine_tcp_subscription(self):
+        host = self.machine_tcp_ip_input.currentText().strip() or "127.0.0.1"
+        port_text = self.machine_tcp_port_input.text().strip() or "9101"
+        try:
+            port = int(port_text)
+        except ValueError:
+            self.machine_tcp_status_label.setText("Invalid TCP port")
+            return
+
+        future = asyncio.run_coroutine_threadsafe(
+            self.digital_twin_process.env.start_machine_axis_tcp_server(host=host, port=port),
+            self.loop,
+        )
+        future.add_done_callback(self._on_start_machine_tcp_done)
+        self.machine_tcp_status_label.setText(f"Starting TCP server at {host}:{port} ...")
+
+    def _on_start_machine_tcp_done(self, future):
+        try:
+            result = future.result()
+        except Exception as e:
+            self.machine_tcp_status_label.setText(f"Start TCP failed: {e}")
+            return
+
+        if result.get("status") == "success":
+            self.machine_tcp_status_label.setText(
+                f"{result.get('message')} ({result.get('host')}:{result.get('port')})")
+            self.machine_tcp_start_button.setEnabled(False)
+            self.machine_tcp_stop_button.setEnabled(True)
+        else:
+            self.machine_tcp_status_label.setText(result.get("message", "Start TCP failed"))
+
+    def stop_machine_tcp_subscription(self):
+        future = asyncio.run_coroutine_threadsafe(
+            self.digital_twin_process.env.stop_machine_axis_tcp_server(),
+            self.loop,
+        )
+        future.add_done_callback(self._on_stop_machine_tcp_done)
+        self.machine_tcp_status_label.setText("Stopping TCP server ...")
+
+    def _on_stop_machine_tcp_done(self, future):
+        try:
+            result = future.result()
+        except Exception as e:
+            self.machine_tcp_status_label.setText(f"Stop TCP failed: {e}")
+            return
+
+        if result.get("status") == "success":
+            self.machine_tcp_status_label.setText(result.get("message", "TCP server stopped"))
+            self.machine_tcp_start_button.setEnabled(True)
+            self.machine_tcp_stop_button.setEnabled(False)
+        else:
+            self.machine_tcp_status_label.setText(result.get("message", "Stop TCP failed"))
+
 
     def find_DT_window(self):
         # 初始化嵌入工具
@@ -404,6 +525,10 @@ class DigitalTwinView(QWidget):
         # 启动仿真
         asyncio.run_coroutine_threadsafe(self.digital_twin_process.env.load_scene(), self.loop)
         asyncio.run_coroutine_threadsafe(self.digital_twin_process.env.start_simulation(),self.loop)
+
+        # 订阅机床状态
+        asyncio.run_coroutine_threadsafe(self.digital_twin_process.env.subscribe_machine_state(True), self.loop)
+        self.machine_axis_listener.start()
 
 
         # 设置定时器查找PyBullet窗口
@@ -449,10 +574,14 @@ class DigitalTwinView(QWidget):
         # 更新PyBullet窗口位置
         self.embedder.update_window_position()
 
+
     def closeEvent(self, event):
         """关闭窗口时的清理工作"""
         # 停止更新定时器
+        # if hasattr(self, "update_timer"):
         self.update_timer.stop()
+        if hasattr(self, "machine_axis_listener"):
+            self.machine_axis_listener.stop()
 
         # 恢复PyBullet窗口
         self.embedder.restore_window()
@@ -593,6 +722,60 @@ class DigitalTwinView(QWidget):
         else:
             print("[DT View:on_debug_button_clicked] Error: debug_widget attribute not found.")
 
+
+
+class MachineAxisListener(QObject):
+    axis_received = pyqtSignal(object)
+    connection_lost = pyqtSignal(str)
+    connection_established = pyqtSignal()
+
+    def __init__(self, ws_url: str, parent=None):
+        super().__init__(None)
+        self.ws_url = ws_url
+        self._thread = QThread()
+        self.moveToThread(self._thread)
+        self._thread.started.connect(self._run_event_loop)
+        self._stop_flag = False
+
+    def start(self):
+        self._stop_flag = False
+        if not self._thread.isRunning():
+            self._thread.start()
+
+    def stop(self):
+        self._stop_flag = True
+
+    def _run_event_loop(self):
+        asyncio.set_event_loop(asyncio.new_event_loop())
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(self._ws_loop())
+        loop.close()
+        self._thread.quit()
+
+    async def _ws_loop(self):
+        try:
+            async with websockets.connect(self.ws_url) as ws:
+                self.connection_established.emit()
+                while not self._stop_flag:
+                    try:
+                        msg = await ws.recv()
+                    except websockets.ConnectionClosed as e:
+                        self.connection_lost.emit(f"Connection closed: {e}")
+                        break
+
+                    try:
+                        data = json.loads(msg)
+                    except json.JSONDecodeError:
+                        self.connection_lost.emit("Received invalid JSON")
+                        continue
+
+                    if data.get("status") == "success":
+                        axis_values = data.get("axis_values")
+                        if axis_values is not None:
+                            self.axis_received.emit(axis_values)
+                    await asyncio.sleep(0)
+        except Exception as e:
+            self.connection_lost.emit(f"WebSocket error: {e}")
 
 
 
