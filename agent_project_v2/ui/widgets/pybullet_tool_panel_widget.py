@@ -7,7 +7,7 @@ from xml.etree import ElementTree as ET
 from PyQt5.QtWidgets import (QWidget, QHBoxLayout, QPushButton, QVBoxLayout, QStackedWidget, QComboBox, QLabel,
                              QLineEdit, QSizePolicy, QGroupBox, QLayout, QApplication, QSpacerItem, QFormLayout,
                              QButtonGroup, QToolButton, QFrame,QHeaderView, QTableWidget, QTableWidgetItem, QFileDialog,
-                             QAction, QMenu
+                             QAction, QMenu,QGridLayout,
                              )
 from PyQt5.QtGui import QIcon,QPixmap
 
@@ -18,6 +18,7 @@ import logging
 import re
 from core.simulation_request import *
 from ui.widgets.DT_debug_widget import PathDataDialog
+import httpx
 
 colors = {
     "light_gray": "#f0f0f0",
@@ -162,6 +163,35 @@ class LineEdit(QLineEdit):
     def focusOutEvent(self, event):
         super().focusOutEvent(event)
         self.setStyleSheet(self.default_style)  # 失去焦点时恢复默认样式
+
+
+class MachineStateWebSocketClient(QThread):
+    # 机床数据监听
+    machine_axis_signal = pyqtSignal(list)
+
+    async def listen(self):
+        uri = "ws://127.0.0.1:8001/ws/machinestate"
+        async with websockets.connect(
+                uri,
+                ping_interval=None,
+                ping_timeout=None,
+        ) as websocket:
+            print("[MachineStateWebSocketClient] Connected to WebSocket:", uri)
+            while True:
+                message = await websocket.recv()
+                data = json.loads(message)
+                axis_values = data.get("axis_values", None)
+                if axis_values is not None:
+                    self.machine_axis_signal.emit(axis_values)
+
+    def run(self):
+        try:
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            loop.run_until_complete(self.listen())
+        except Exception as e:
+            print(f"[MachineStateWebSocketClient] Error in event loop setup: {e}")
+
 
 class ArmToolPage(QWidget):
     """机械臂工具页面"""
@@ -591,13 +621,221 @@ class ArmToolPage(QWidget):
 
 class MachineToolPage(QWidget):
     """机床工具页面"""
-    def __init__(self, parent=None):
+    AXES = ["A", "C", "X", "Y", "Z"]
+    machine_axis_values_ready = pyqtSignal(dict)
+    machine_axis_error = pyqtSignal(str)
+
+    def __init__(self, parent=None, simulation_view=None):
         super().__init__(parent)
+        self.simulation_view = simulation_view
+        self._is_refreshing_inputs = False
+
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(4)
         self.label = QLabel("机床工具页面")
         layout.addWidget(self.label)
 
-        # 在此页面中添加具体的机床工具组件
+        self._build_compact_machine_editor(layout)
+        self.machine_axis_values_ready.connect(self._update_machine_axis_display)
+        self.machine_axis_error.connect(self._show_machine_axis_error)
+        self._init_machine_state_subscription()
+
+    def _init_machine_state_subscription(self):
+        if self.simulation_view is None:
+            return
+        self.machine_state_websocket_client = MachineStateWebSocketClient()
+        self.machine_state_websocket_client.machine_axis_signal.connect(self._on_machine_axis_signal)
+        self.machine_state_websocket_client.start()
+        future = asyncio.run_coroutine_threadsafe(
+            self._subscribe_machine_state_async(True),
+            self.simulation_view.env_loop,
+        )
+        future.add_done_callback(self._handle_machine_subscribe_result)
+
+    def _create_axis_line_edit(self, placeholder_text, default_text=""):
+        line_edit = LineEdit(type="input")
+        line_edit.setPlaceholderText(placeholder_text)
+        line_edit.setText(default_text)
+        line_edit.setMaximumWidth(70)
+        return line_edit
+
+    def _build_compact_machine_editor(self, parent_layout):
+        compact_frame = QFrame(self)
+        compact_frame.setFrameShape(QFrame.StyledPanel)
+        compact_layout = QGridLayout(compact_frame)
+        compact_layout.setContentsMargins(6, 6, 6, 6)
+        compact_layout.setHorizontalSpacing(6)
+        compact_layout.setVerticalSpacing(4)
+
+        compact_layout.addWidget(QLabel(""), 0, 0)
+        for col, axis in enumerate(self.AXES, start=1):
+            header = QLabel(axis)
+            header.setAlignment(Qt.AlignCenter)
+            compact_layout.addWidget(header, 0, col)
+        compact_layout.addWidget(QLabel("操作"), 0, len(self.AXES) + 1)
+
+        compact_layout.addWidget(QLabel("设置"), 1, 0)
+        self.axis_inputs = {}
+        for col, axis in enumerate(self.AXES, start=1):
+            line_edit = self._create_axis_line_edit(f"{axis}值")
+            line_edit.textChanged.connect(self.update_applied_axis_preview)
+            self.axis_inputs[axis] = line_edit
+            compact_layout.addWidget(line_edit, 1, col)
+
+        self.machine_set_btn = QPushButton("Set", self)
+        self.machine_set_btn.setMaximumWidth(72)
+        self.machine_set_btn.clicked.connect(self.on_set_machine_axis_values)
+        compact_layout.addWidget(self.machine_set_btn, 1, len(self.AXES) + 1)
+
+        compact_layout.addWidget(QLabel("偏置"), 2, 0)
+        self.offset_inputs = {}
+        for col, axis in enumerate(self.AXES, start=1):
+            line_edit = self._create_axis_line_edit(f"{axis}偏置", "0")
+            line_edit.textChanged.connect(self.update_applied_axis_preview)
+            self.offset_inputs[axis] = line_edit
+            compact_layout.addWidget(line_edit, 2, col)
+
+        # offset_hint = QLabel("偏置示例：X=-100 时，发送值 = 输入值 - 100")
+        # compact_layout.addWidget(offset_hint, 2, len(self.AXES) + 1)
+
+        compact_layout.addWidget(QLabel("发送"), 3, 0)
+        self.machine_applied_value_label = QLabel("A=0.00000, C=0.00000, X=0.00000, Y=0.00000, Z=0.00000")
+        self.machine_applied_value_label.setWordWrap(False)
+        compact_layout.addWidget(self.machine_applied_value_label, 3, 1, 1, len(self.AXES) + 1)
+
+        compact_layout.addWidget(QLabel("当前"), 4, 0)
+        self.current_axis_display = LineEdit(type="output")
+        self.current_axis_display.setReadOnly(True)
+        self.current_axis_display.setFocusPolicy(Qt.NoFocus)
+        self.current_axis_display.setText("等待仿真环境返回机床轴数据...")
+        compact_layout.addWidget(self.current_axis_display, 4, 1, 1, len(self.AXES) + 1)
+
+        parent_layout.addWidget(compact_frame)
+
+    def _parse_float(self, value, default=0.0):
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return default
+
+    def _collect_axis_input_values(self):
+        return {axis: self._parse_float(self.axis_inputs[axis].text(), 0.0) for axis in self.AXES}
+
+    def _collect_offset_values(self):
+        return {axis: self._parse_float(self.offset_inputs[axis].text(), 0.0) for axis in self.AXES}
+
+    def update_applied_axis_preview(self):
+        if self._is_refreshing_inputs:
+            return
+        raw_values = self._collect_axis_input_values()
+        offset_values = self._collect_offset_values()
+        adjusted_values = {axis: raw_values[axis] + offset_values[axis] for axis in self.AXES}
+        preview_text = ", ".join([f"{axis}={adjusted_values[axis]:.5f}" for axis in self.AXES])
+        self.machine_applied_value_label.setText(preview_text)
+
+    def set_axis_inputs_from_values(self, axis_values):
+        if len(axis_values) != len(self.AXES):
+            return
+        self._is_refreshing_inputs = True
+        try:
+            for axis, value in zip(self.AXES, axis_values):
+                self.axis_inputs[axis].setText(f"{float(value):.5f}")
+        finally:
+            self._is_refreshing_inputs = False
+        self.update_applied_axis_preview()
+
+    def on_set_machine_axis_values(self):
+        if self.simulation_view is None:
+            self.current_axis_display.setText("未连接仿真视图，无法设置机床轴值。")
+            return
+
+        offset_values = self._collect_offset_values()
+        target_values = []
+        for axis in self.AXES:
+            raw_text = self.axis_inputs[axis].text().strip()
+            if raw_text == "":
+                self.current_axis_display.setText(f"{axis} 轴输入为空，请填写数值后再设置。")
+                return
+            target_values.append(self._parse_float(raw_text, 0.0) + offset_values[axis])
+
+        future = asyncio.run_coroutine_threadsafe(
+            self._set_machine_axis_values_async(target_values, maxVelocity=1),
+            self.simulation_view.env_loop,
+        )
+        future.add_done_callback(self._handle_machine_set_result)
+        self.current_axis_display.setText("正在设置机床 ACXYZ 轴值...")
+        self.machine_applied_value_label.setText(", ".join([f"{axis}={value:.5f}" for axis, value in zip(self.AXES, target_values)]))
+
+    async def _subscribe_machine_state_async(self, on_subscribe):
+        env = self.simulation_view.pybullet_process.env
+        if hasattr(env, "subscribe_machine_state"):
+            return await env.subscribe_machine_state(on_subscribe)
+
+        base_url = getattr(env, "base_url", "http://localhost:8001")
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{base_url}/publish_machine_state", json={"on_subscribe": on_subscribe})
+            if response.status_code == 200:
+                return response.json()
+            return {"status": "error", "message": "Failed to subscribe_machine_state"}
+
+    async def _set_machine_axis_values_async(self, axis_values, maxVelocity=1):
+        env = self.simulation_view.pybullet_process.env
+        if hasattr(env, "set_machine_axis_values"):
+            return await env.set_machine_axis_values(axis_values, maxVelocity=maxVelocity)
+
+        base_url = getattr(env, "base_url", "http://localhost:8001")
+        request = MachineAxisRequest(target_axis_values=axis_values, maxVelocity=maxVelocity)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(
+                f"{base_url}/set_machine_axis_values",
+                json=request.to_dict(),
+                timeout=10,
+            )
+            if response.status_code == 200:
+                return response.json()
+            return {"status": "error", "message": "Failed to set_machine_axis_values"}
+
+    def _handle_machine_subscribe_result(self, future):
+        try:
+            result = future.result()
+        except Exception as e:
+            self.machine_axis_error.emit(f"订阅机床轴值失败: {e}")
+            return
+
+        if result.get("status") != "success":
+            message = result.get("message", "未知错误")
+            self.machine_axis_error.emit(f"订阅机床轴值失败: {message}")
+
+    def _on_machine_axis_signal(self, axis_values):
+        if len(axis_values) != len(self.AXES):
+            self.machine_axis_error.emit("机床轴数据格式错误。")
+            return
+        self.machine_axis_values_ready.emit({"axis_values": axis_values})
+
+    def _handle_machine_set_result(self, future):
+        try:
+            result = future.result()
+        except Exception as e:
+            self.machine_axis_error.emit(f"设置机床轴值失败: {e}")
+            return
+
+        if result.get("status") != "success":
+            message = result.get("message", "未知错误")
+            self.machine_axis_error.emit(f"设置机床轴值失败: {message}")
+            return
+
+        self.machine_axis_values_ready.emit(result)
+
+    def _update_machine_axis_display(self, result):
+        axis_values = result.get("axis_values", [])
+        display_text = ", ".join([f"{axis}={float(value):.5f}" for axis, value in zip(self.AXES, axis_values)])
+        self.current_axis_display.setText(display_text)
+        if all(not self.axis_inputs[axis].text().strip() for axis in self.AXES):
+            self.set_axis_inputs_from_values(axis_values)
+
+    def _show_machine_axis_error(self, message):
+        self.current_axis_display.setText(message)
 
 
 
@@ -1124,7 +1362,8 @@ class ToolPanel(QWidget):
 
         # 创建每个工具页面
         self.arm_tool_page = ArmToolPage(simulation_view=self.simulation_view)
-        self.machine_tool_page = MachineToolPage()
+        # self.machine_tool_page = MachineToolPage()
+        self.machine_tool_page = MachineToolPage(simulation_view=self.simulation_view)
         self.path_tool_page = PathToolPage(tool_pannel=self)
         self.other_tool_page = OtherToolPage()
 

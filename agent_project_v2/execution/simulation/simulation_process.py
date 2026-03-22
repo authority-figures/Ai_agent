@@ -274,3 +274,33 @@ class CustomSimulationEnv:
         except Exception as e:
             print(f"[CustomSimulationEnv:execute_path] Exception: {e}")
             return {"status": "error", "message": str(e)}
+
+
+    async def get_machine_axis_values(self):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"{self.base_url}/get_machine_axis_values")
+                if response.status_code == 200:
+                    return response.json()
+                return {"status": "error", "message": "Failed to get_machine_axis_values"}
+        except Exception as e:
+            print(f"[CustomSimulationEnv:get_machine_axis_values] Exception: {e}")
+            return {"status": "error", "message": str(e)}
+
+
+
+    async def set_machine_axis_values(self, axis_values, maxVelocity=1):
+        try:
+            request = MachineAxisRequest(target_axis_values=axis_values, maxVelocity=maxVelocity)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/set_machine_axis_values",
+                    json=request.to_dict(),
+                    timeout=10,
+                )
+                if response.status_code == 200:
+                    return response.json()
+                return {"status": "error", "message": "Failed to set_machine_axis_values"}
+        except Exception as e:
+            print(f"[CustomSimulationEnv:set_machine_axis_values] Exception: {e}")
+            return {"status": "error", "message": str(e)}

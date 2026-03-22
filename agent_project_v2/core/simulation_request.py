@@ -74,3 +74,12 @@ class ExecutePathRequest(BaseModel):
     def to_dict(self):
         """将对象转换为字典，便于 JSON 序列化"""
         return self.dict()  # Pydantic 的 `dict()` 方法将模型转化为字典
+
+
+class MachineAxisRequest(BaseModel):
+    target_axis_values: List[float]  # A, C, X, Y, Z
+    maxVelocity: float = 1
+
+    def to_dict(self):
+        """将对象转换为字典，便于 JSON 序列化"""
+        return self.dict()
