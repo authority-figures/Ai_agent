@@ -7,12 +7,192 @@ from fastapi import FastAPI,Request
 from execution.simulation.environment import SimulationEnvironment
 from execution.simulation.models import *
 from core.simulation_request import *
+import re
+import json
+from datetime import datetime
+from pathlib import Path
+from uuid import uuid4
 
 # 创建 FastAPI 服务器
 app = FastAPI()
 sim_env = SimulationEnvironment(options="MyPyBulletSimulation_")
 # sim_env.initialize()  # 不能提前启动
 print("sim_env physicsClientId:", sim_env.physics_client)
+
+PLANNED_PATH_DIR = Path(__file__).resolve().parents[2] / "runtime" / "planned_paths"
+
+
+def _ensure_planned_path_dir() -> Path:
+    PLANNED_PATH_DIR.mkdir(parents=True, exist_ok=True)
+    return PLANNED_PATH_DIR
+
+
+def _save_planned_path(planner_name: str, start_joints, target_joints, path):
+    path_id = f"path_{datetime.utcnow().strftime('%Y%m%dT%H%M%SZ')}_{uuid4().hex[:8]}"
+    payload = {
+        "path_id": path_id,
+        "planner_name": planner_name,
+        "start_joints": start_joints,
+        "target_joints": target_joints,
+        "waypoint_count": len(path),
+        "path": path,
+        "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+    path_file = _ensure_planned_path_dir() / f"{path_id}.json"
+    path_file.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path_id, path_file
+
+
+def _load_planned_path(path_id: str):
+    path_file = _ensure_planned_path_dir() / f"{path_id}.json"
+    if not path_file.exists():
+        raise FileNotFoundError(f"Path '{path_id}' not found")
+    return json.loads(path_file.read_text(encoding="utf-8"))
+
+
+def _plan_joint_path(request: PathPlanRequest):
+    planner_name = request.planner_name or "RRTConnect"
+    planner = sim_env.pb_ompl_interface
+
+    sim_env.robot_list[0].set_state(request.start_joints)
+
+    if planner_name in {"RRTConnect_Custom", "RRTConnect"} and hasattr(planner, "get_T_goal") and hasattr(planner, "set_tsRRT_sample"):
+        planner.get_T_goal(request.target_joints, tcp_name="rolling_tool")
+        planner.z_range = (0.01, 0.2)
+        planner.x_range = (-0.01, 0.01)
+        planner.y_range = (-0.001, 0.001)
+        planner.yaw_range = 30
+        planner.roll_range = 5
+        planner.pitch_range = 5
+        planner.set_tsRRT_sample()
+        planner.set_planner("RRTConnect")
+        return planner.plan(request.target_joints, allowed_time=request.allowed_time)
+
+    planner.set_planner(planner_name)
+    return planner.plan_start_goal(
+        request.start_joints,
+        request.target_joints,
+        allowed_time=request.allowed_time,
+    )
+
+
+def _get_current_pose(reference_frame: str):
+    robot = sim_env.robot_list[0]
+    if reference_frame == "body":
+        return robot.get_pos_ori_from_ik(tcp_name=None)
+    if reference_frame == "world":
+        return robot.show_link_sys(5, 0.1, 1)
+    if reference_frame == "CNC_C":
+        return robot.get_position_relative_to_link(
+            bodyA_id=robot.id_robot,
+            bodyB_id=sim_env.machine.id_robot,
+            linkA_id=5,
+            linkB_id=sim_env.machine.turntable_index,
+        )
+    if reference_frame == "work_piece":
+        world_pos, world_ori = robot.show_link_sys(5, 0.1, 1)
+        result = sim_env.rm_sys.get_point_in_workpiece2world(world_pos, world_ori, inverse=True)
+        if result is None:
+            raise ValueError("Work piece frame is unavailable")
+        return result
+    raise ValueError("No reference frame matched")
+
+
+def _resolve_pose_for_ik(target_position, target_orientation, reference_frame):
+    robot = sim_env.robot_list[0]
+    orientation = target_orientation
+    if orientation is None:
+        _, orientation = _get_current_pose(reference_frame)
+
+    if reference_frame == "body":
+        return target_position, orientation, "body_sys"
+    if reference_frame == "world":
+        return target_position, orientation, "world_sys"
+    if reference_frame == "CNC_C":
+        T_world2robot = sim_env.rm_sys.T_robot2world.copy()
+        T_c2world = robot.pos_to_matrix([0, 0, -sim_env.machine.C_in_sys0], [0, 0, 0, 1])
+        T_c2target = robot.pos_to_matrix(target_position, orientation)
+        T_robot2target = np.linalg.inv(T_world2robot) @ np.linalg.inv(T_c2world) @ T_c2target
+        pos, ori = robot.matrix_to_pos(T_robot2target)
+        return pos, ori, "body_sys"
+    if reference_frame == "work_piece":
+        result = sim_env.rm_sys.get_point_in_workpiece2robot(target_position, orientation)
+        if result is None:
+            raise ValueError("Work piece frame is unavailable")
+        pos, ori = result
+        return pos, ori, "body_sys"
+    raise ValueError("No reference frame matched")
+
+
+def _compute_joint_state_for_target(request: TargetJointStateRequest):
+    robot = sim_env.robot_list[0]
+    pos, ori, inverse_mode = _resolve_pose_for_ik(
+        request.target_position,
+        request.target_orientation,
+        request.reference_frame,
+    )
+    previous_inverse_mode = robot.inverse_mode
+    try:
+        robot.inverse_mode = inverse_mode
+        start_eve = [0.10568717528231546, -0.4105353654619583, -1.1813494586720104, 0.03241272300551933,
+                     -1.8410220234890533,
+                     -0.6757545624540242]
+        joints_value = robot.get_state_from_ik(pos, ori,start=start_eve, maxNumIteration=10000, tcp_name="rolling_tool")
+    finally:
+        robot.inverse_mode = previous_inverse_mode
+
+    return joints_value, pos, ori
+
+
+from tqdm import tqdm
+def _generate_rolling_joint_path(tool_path_file: str):
+    cls_path = Path(tool_path_file)
+    if not cls_path.exists():
+        raise FileNotFoundError(f"Tool path file '{tool_path_file}' not found")
+    if not hasattr(sim_env, "rm_sys"):
+        raise ValueError("RM system is unavailable")
+    if sim_env.rm_sys.T_workpiece2robot is None:
+        raise ValueError("Work piece transform is unavailable")
+
+    robot = sim_env.robot_list[0]
+    if "rolling_tool" not in robot.tcp_list:
+        raise ValueError("Robot TCP 'rolling_tool' is unavailable")
+
+
+    joints_list = []
+    start = list(robot.get_joints_states())
+    start = [0.10568717528231546, -0.4105353654619583, -1.1813494586720104, 0.03241272300551933, -1.8410220234890533,
+             -0.6757545624540242]
+    previous_inverse_mode = robot.inverse_mode
+    try:
+        goto, origin_data = sim_env.rm_sys.read_cls_file(sim_env.robot_list[0], cls_path, inverse=True)
+        pos_list, ori_list = [], []
+        for item in goto:
+            # 解包位置信息pos (X/Y/Z)
+            pos_list.append((item['X'], item['Y'], item['Z']))
+            # 解包姿态信息ori (x/y/z/w)
+            ori_list.append((item['O']['x'], item['O']['y'], item['O']['z'], item['O']['w']))
+
+        pairs = zip(pos_list[:], ori_list[:])
+        total_steps = min(len(pos_list[:]), len(ori_list[:]))
+
+        for i, (pos, ori) in enumerate(tqdm(pairs, total=total_steps, desc="Planning path")):
+            joints = sim_env.robot_list[0].get_state_from_ik(pos,
+                                                             ori,
+                                                             start=start, maxNumIteration=10000,
+                                                             tcp_name="rolling_tool")
+            start = joints
+
+            joints_list.append(joints)
+
+    finally:
+        robot.inverse_mode = previous_inverse_mode
+
+    if not joints_list:
+        raise ValueError("No valid GOTO entries were found in the tool path file")
+    return joints_list
+
+
 
 @app.post("/start_simulation")
 async def start_simulation():
@@ -122,36 +302,14 @@ async def move_robot_to_target(request: PosMoveRequest):
     try:
         if len(sim_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
-        robot_id = sim_env.robot_list[0].id_robot
-
-        if request.reference_frame == "body":
-            pre_inverse_mode = sim_env.robot_list[0].inverse_mode
-            sim_env.robot_list[0].inverse_mode = "body_sys"
-            joints_value = sim_env.robot_list[0].get_state_from_ik(request.target_position,request.target_orientation,tcp_name=None)
-            sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
-            sim_env.robot_list[0].inverse_mode = pre_inverse_mode
-        elif request.reference_frame == "world":
-            # response = sim_env.move_robot_to_target(robot_id,request.target_position,request.target_orientation,request.maxVelocity)
-            pre_inverse_mode = sim_env.robot_list[0].inverse_mode
-            sim_env.robot_list[0].inverse_mode = "world_sys"
-            joints_value = sim_env.robot_list[0].get_state_from_ik(request.target_position, request.target_orientation,
-                                                                   tcp_name=None)
-            sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
-            sim_env.robot_list[0].inverse_mode = pre_inverse_mode
-        elif request.reference_frame == "CNC_C":
-            T_world2robot = sim_env.rm_sys.T_robot2world.copy()
-            T_c2world = sim_env.robot_list[0].pos_to_matrix([0,0,-sim_env.machine.C_in_sys0],[0,0,0,1])
-            T_c2target = sim_env.robot_list[0].pos_to_matrix(request.target_position,request.target_orientation)
-            T_robot2target = np.linalg.inv(T_world2robot) @ np.linalg.inv(T_c2world) @ T_c2target
-            pos, ori = sim_env.robot_list[0].matrix_to_pos(T_robot2target)
-            pre_inverse_mode = sim_env.robot_list[0].inverse_mode
-            sim_env.robot_list[0].inverse_mode = "body_sys"
-            joints_value = sim_env.robot_list[0].get_state_from_ik(pos, ori,
-                                                                   tcp_name=None)
-            sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
-            sim_env.robot_list[0].inverse_mode = pre_inverse_mode
-        else:
-            return {"status": "error", "message": "No reference frame matched"}
+        joint_request = TargetJointStateRequest(
+            robot_id=request.robot_id,
+            target_position=request.target_position,
+            target_orientation=request.target_orientation,
+            reference_frame=request.reference_frame,
+        )
+        joints_value, _, _ = _compute_joint_state_for_target(joint_request)
+        sim_env.robot_list[0].joint_move_once(joints_value, maxVelocity=request.maxVelocity)
 
         return {"status": "success", "message": "Robot moved to target"}
 
@@ -159,6 +317,26 @@ async def move_robot_to_target(request: PosMoveRequest):
         print("[execution:simulation:api:move_robot_to_target] Error moving robot to target:", e)
         return {"status": "error", "message": str(e)}
 
+
+@app.post("/get_target_joint_state")
+async def get_target_joint_state(request: TargetJointStateRequest):
+    """ API: 根据目标位姿获取关节角 """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        joints_value, resolved_pos, resolved_ori = _compute_joint_state_for_target(request)
+        return {
+            "status": "success",
+            "message": "Target Joint state computed",
+            "joint_state": list(joints_value),
+            # "target_pose_in_robot_frame": {   # 返回解析后的目标位姿，方便调试和验证
+            #     "pos": list(resolved_pos),
+            #     "ori": list(resolved_ori),
+            # },
+        }
+    except Exception as e:
+        print("[execution:simulation:api:get_target_joint_state] Error computing joint state:", e)
+        return {"status": "error", "message": str(e)}
 
 @app.post("/joint_move")
 async def joint_move(request: JointMoveRequest):
@@ -181,43 +359,87 @@ async def plan_path(request: PathPlanRequest):
      API: 规划路径
     """
     try:
-
-
         if len(sim_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
+        running_flag = False
+        if sim_env.is_running:
+            running_flag = True
+            sim_env.stop_simulation()
 
-        if request.planner_name == "RRTConnect_Custom" or request.planner_name == "RRTConnect":
+        if request.start_joints is None:
+            start_joints = sim_env.robot_list[0].get_joints_states()
+            request.start_joints = start_joints
 
-            running_flag = False
-            if sim_env.is_running:
-                running_flag = True
-                sim_env.stop_simulation()
-            sim_env.robot_list[0].set_state(request.start_joints)
-            # 执行规划
-            sim_env.pb_ompl_interface.get_T_goal(request.target_joints, tcp_name="rolling_tool")
-            sim_env.pb_ompl_interface.z_range = (0.01, 0.2)  # z-axis range for sampling
-            sim_env.pb_ompl_interface.x_range = (-0.01, 0.01)
-            sim_env.pb_ompl_interface.y_range = (-0.001, 0.001)
-            sim_env.pb_ompl_interface.yaw_range = 30
-            sim_env.pb_ompl_interface.roll_range = 5
-            sim_env.pb_ompl_interface.pitch_range = 5
-            sim_env.pb_ompl_interface.set_tsRRT_sample()
-            sim_env.pb_ompl_interface.set_planner("RRTConnect")
-            # sim_env.pb_ompl_interface.set_state_sampler(taskspaceRRT.MixedValidStateSampler(sim_env.pb_ompl_interface.si, sim_env.pb_ompl_interface.sample_in_task_space, ratio=0.8))
-            res, path = sim_env.pb_ompl_interface.plan(request.target_joints)
 
+        try:
+            res, path = _plan_joint_path(request)
+        finally:
             if running_flag:
                 sim_env.start_simulation()
 
-            if res:
-                return {"status": "success", "path": path}
+        if not res:
+            return {"status": "failed", "message": "No collision-free path found", "path": None}
 
-
-        return {"status": "failed", "path": None}
+        path_id, path_file = _save_planned_path(
+            planner_name=request.planner_name or "RRTConnect",
+            start_joints=request.start_joints,
+            target_joints=request.target_joints,
+            path=path,
+        )
+        return {
+            "status": "success",
+            "message": "Path planned successfully",
+            "path_id": path_id,
+            # "path": path, # 不直接返回路径数据，避免过大负载。客户端可以通过 path_id 再请求一次来获取路径详情。
+            "waypoint_count": len(path),
+            "storage": str(path_file),
+        }
     except Exception as e:
         print("[execution:simulation:api:plan_path] Error planning path:", e)
         return {"status": "error", "message": str(e)}
 
+
+
+@app.post("/get_rolling_path")
+async def get_rolling_path(request: RollingPathRequest):
+    """ API: 根据刀位文件生成滚压路径 """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+
+        if "区域1" in request.tool_path_name:
+            tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域1.cls"
+        elif "区域2" in request.tool_path_name:
+            tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域2.cls"
+        elif "区域3" in request.tool_path_name:
+            tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域3.cls"
+        elif "区域4" in request.tool_path_name:
+            tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域4.cls"
+        elif "区域0" in request.tool_path_name:
+            tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域0.cls"
+        else:
+            tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域1.cls"
+
+
+        joints_list = _generate_rolling_joint_path(tool_path_file)
+        start_joints = joints_list[0]
+        path_id, path_file = _save_planned_path(
+            planner_name="rolling_path",
+            start_joints=start_joints,
+            target_joints=joints_list[-1],
+            path=joints_list,
+        )
+        return {
+            "status": "success",
+            "message": "Rolling path generated",
+            "path_id": path_id,
+            "start_joints": start_joints,
+            "waypoint_count": len(joints_list),
+            "storage": str(path_file),
+        }
+    except Exception as e:
+        print("[execution:simulation:api:get_rolling_path] Error generating rolling path:", e)
+        return {"status": "error", "message": str(e)}
 
 
 @app.post("/execute_path")
@@ -226,16 +448,57 @@ async def execute_path(request: ExecutePathRequest):
     try:
         if len(sim_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
-        if sim_env.pb_ompl_interface:
-            sim_env.pb_ompl_interface.execute(request.joints_list, dynamics=request.dynamics)
 
-        sim_env.update_workpiece2robotBy_calibration()
-        sim_env.update_robot_constrain()
-        sim_env.update_camera_constrain()
-        return {"status": "success", "message": "Path executed"}
+        joints_list = request.joints_list
+        path_id = request.path_id
+        if joints_list is None:
+            if not path_id:
+                return {"status": "error", "message": "Either joints_list or path_id is required"}
+            payload = _load_planned_path(path_id)
+            joints_list = payload.get("path")
+
+        if not joints_list:
+            return {"status": "error", "message": "Path is empty"}
+
+        if request.collision_detection:
+            path_safe = True
+            for i,joints in enumerate(joints_list):
+                sim_env.step_simulation()
+                sim_env.robot_list[0].set_joints_states(joints)
+                safe = sim_env.pb_ompl_interface.is_state_valid(joints)
+                if not safe:
+                    path_safe = False
+                    print(f"Collision detected at step {i} for joints: {joints}")
+                    # time.sleep(1)
+            if path_safe:
+                return {
+                    "status": "success",
+                    "message": "Path executed with collision detection, no collision detected",
+                    "path_id": path_id,
+                    "waypoint_count": len(joints_list),
+                }
+            else:
+                return {
+                    "status": "failed",
+                    "message": "Collision detected during path execution",
+                    "path_id": path_id,
+                    "waypoint_count": len(joints_list),
+                }
+
+        else:
+            if sim_env.pb_ompl_interface:
+                sim_env.pb_ompl_interface.execute(joints_list, dynamics=request.dynamics)
+            return {
+                "status": "success",
+                "message": "Path executed",
+                "path_id": path_id,
+                "waypoint_count": len(joints_list),
+            }
     except Exception as e:
         print("[execution:simulation:api:execute_path] Error executing path:", e)
         return {"status": "error", "message": str(e)}
+
+
 
 
 @app.post("/update_env_by_calibration")
@@ -299,20 +562,7 @@ async def get_robot_end_pos_and_ori(request: GetPosOriRequest):
     try:
         if len(sim_env.robot_list) == 0:
             return {"status": "error", "message": "No robot loaded"}
-        if request.reference_frame == "body":
-            pos, ori = sim_env.robot_list[0].get_pos_ori_from_ik(tcp_name=None)
-        elif request.reference_frame == "world":
-            pos, ori = sim_env.robot_list[0].show_link_sys(5,0.1,1)
-            # pos, ori = sim_env.get_robot_end_pos_and_ori(sim_env.robot_list[0].id_robot)
-        elif request.reference_frame == "CNC_C":
-            pos, ori = sim_env.robot_list[0].get_position_relative_to_link(
-                bodyA_id=sim_env.robot_list[0].id_robot,
-                bodyB_id=sim_env.machine.id_robot,
-                linkA_id=5,
-                linkB_id=sim_env.machine.turntable_index,
-            )
-        else:
-            return {"status": "error", "message": "No reference frame matched"}
+        pos, ori = _get_current_pose(request.reference_frame)
 
         data = {"pos": tuple(pos), "ori": tuple(ori)}
         return {"status": "success", "message": data}
@@ -345,6 +595,7 @@ async def get_tcp_pos_and_ori(request: GetPosOriRequest):
     except Exception as e:
         print("[execution:simulation:api:get_tcp_pos_and_ori] Error getting TCP pos and ori:", e)
         return {"status": "error", "message": str(e)}
+
 
 
 

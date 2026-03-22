@@ -383,7 +383,7 @@
     name="joint_RT_1"
     type="fixed">
     <origin
-      xyz="0.006 0 0.14"
+      xyz="0.006 0 0.24837"
       rpy="0 0 0" />
     <parent
       link="Link_rolling_tool_base" />
@@ -397,7 +397,7 @@
     name="joint_RT_2"
     type="fixed">
     <origin
-      xyz="-0.006 0 0.14"
+      xyz="-0.006 0 0.24837"
       rpy="0 0 0" />
     <parent
       link="Link_rolling_tool_base" />
@@ -408,7 +408,7 @@
   </joint>
 
 <joint name="rolling_tool_tcp_joint" type="fixed">
-        <origin xyz="0 0 0.14" rpy="0 0 0" />
+        <origin xyz="0 0 0.24837" rpy="0 0 0" />
         <parent link="Link_rolling_tool_base" />
         <child link="rolling_tool_tcp" />
     </joint>

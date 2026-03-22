@@ -196,6 +196,7 @@ class ArmToolPage(QWidget):
         self.reference_frame_combo.addItem("机械臂基座坐标系")
         self.reference_frame_combo.addItem("世界坐标系")
         self.reference_frame_combo.addItem("机床转台中心坐标系")
+        self.reference_frame_combo.addItem("工件坐标系")
         # self.reference_frame_combo.currentIndexChanged.connect(self.on_reference_frame_changed)
         self.reference_frame_combo.setStyleSheet("""
             QComboBox {
@@ -332,6 +333,8 @@ class ArmToolPage(QWidget):
             self.simulation_view.pybullet_process.env.reference_frame = "world"
         elif selected_item == "机床转台中心坐标系":
             self.simulation_view.pybullet_process.env.reference_frame = "CNC_C"
+        elif selected_item == "工件坐标系":
+            self.simulation_view.pybullet_process.env.reference_frame = "work_piece"
 
     def create_GUI_robot_info(self):
         # 创建显示数据的组

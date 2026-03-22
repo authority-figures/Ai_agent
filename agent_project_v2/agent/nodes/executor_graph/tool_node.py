@@ -20,6 +20,14 @@ class CustomToolNode:
         if self.pre_fn:
             state = await self.pre_fn(state)
 
+
+        # 打印工具调用信息
+        last_message = state.get("messages", [])[-1] if state.get("messages") else None
+        if last_message is not None and getattr(last_message, "tool_calls", None):
+            ColorPrinter.debug_normal(f"[Executor tool_node] tool_calls={last_message.tool_calls}")
+        # 打印工具调用信息
+
+
         try:
             # state = self.tool_node.invoke(state)
             tool_message = await self.tool_node.ainvoke(state)
@@ -43,6 +51,7 @@ async def post_fn_exec(state: dict):
     # 假设任务在 state 中，并且你有 task_data 字段
     task = state.get("task")
     tool_message = state.get("messages", [])[-1] if state.get("messages") else None
+    print(f"tool_message in post_fn_exec: {tool_message}")
     if tool_message:
         # 获取 ExecutionStep
         state["exec_tool_messages"] = tool_message

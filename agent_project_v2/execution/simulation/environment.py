@@ -73,7 +73,7 @@ class SimulationEnvironment:
         machine_file_name = os.path.join(self.base_path, machine_file_name)
         robot_urdf = r"./models/jaka_description/urdf/jaka_minicobo.urdf"
         robot_urdf = os.path.join(self.base_path, robot_urdf)
-        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm.urdf"
+        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm_len140mm.urdf"
         robot_with_rolling_tool_urdf = os.path.join(self.base_path, robot_with_rolling_tool_urdf)
         machine = Machine(self.physics_client)
         self.machine = machine
@@ -107,12 +107,12 @@ class SimulationEnvironment:
 
         self.robot_list[0].inverse_mode = "body_sys"
 
-        # 加载物理相机
-        cam_urdf = "./models/camera/urdf/camera.urdf"
-        cam_urdf = os.path.join(self.base_path, cam_urdf)
-        self.camera = Robot(self.physics_client)
-        self.camera.load_urdf(fileName=cam_urdf, basePosition=(0.05, -0.10, 0.75),
-                         baseOrientation=p.getQuaternionFromEuler([1.57, 0, 0]), useFixedBase=0)
+        # # 加载物理相机
+        # cam_urdf = "./models/camera/urdf/camera.urdf"
+        # cam_urdf = os.path.join(self.base_path, cam_urdf)
+        # self.camera = Robot(self.physics_client)
+        # self.camera.load_urdf(fileName=cam_urdf, basePosition=(0.05, -0.10, 0.75),
+        #                  baseOrientation=p.getQuaternionFromEuler([1.57, 0, 0]), useFixedBase=0)
 
         # 配置系统
         self.rm_sys = RM_sys(self.robot_list, self.physics_client)
@@ -120,36 +120,37 @@ class SimulationEnvironment:
 
         # 绑定机床到机械臂
         self.rm_sys.init_machine(self.machine, type='velocity')
-        self.rm_sys.create_constrain(self.machine,self.robot_list[0],parentPosition=[-0.2, +0.1, 0.08], childOrientation=[0.7068252, 0, 0, 0.7073883]
+        # 机械臂位置 -0.2, +0.1, 0.08
+        self.rm_sys.create_constrain(self.machine,self.robot_list[0],parentPosition=[-0.18, +0.1, 0.12], childOrientation=[0.7068252, 0, 0, 0.7073883]
                                      ,workpiece_pos=self.workpiece_pose,workpiece_ori=self.workpiece_orientation)
         self.rm_sys.init_robot(self.robot_list[0])
 
         # 加载标定板
-        board_urdf = "./models/calibration_board/urdf/calibration_board.urdf"
-        board_urdf = os.path.join(self.base_path, board_urdf)
-        self.board = Calibration_board(self.physics_client,board_urdf)
-        self.rm_sys.robot_list.append(self.board)
-        self.rm_sys.robot_list.append(self.machine.workpiece)
-        pos, ori = self.rm_sys.get_point_in_workpiece2world([0.05, -0.05, 0.12],
-                                                            p.getQuaternionFromEuler([0, 0, PI/2],physicsClientId=self.physics_client))
-        self.board.reset_position_and_orientation(position=pos,
-                                                  orientation=ori)
+        # board_urdf = "./models/calibration_board/urdf/calibration_board.urdf"
+        # board_urdf = os.path.join(self.base_path, board_urdf)
+        # self.board = Calibration_board(self.physics_client,board_urdf)
+        # self.rm_sys.robot_list.append(self.board)
+        # self.rm_sys.robot_list.append(self.machine.workpiece)
+        # pos, ori = self.rm_sys.get_point_in_workpiece2world([0.05, -0.05, 0.12],
+        #                                                     p.getQuaternionFromEuler([0, 0, PI/2],physicsClientId=self.physics_client))
+        # self.board.reset_position_and_orientation(position=pos,
+        #                                           orientation=ori)
 
-        # 绑定相机到机械臂
-        self.rm_sys.camera = self.camera
-        self.robot_list[0].id_end_effector = 7
-        self.camera_constraint = self.rm_sys.bind_cam2robot(self.robot_list[0], self.camera,
-                                                            pos_in_robot_end_link=[0, -0.05, -0.00358],
-                                                            pos_in_cam_base_link=[0, 0, 0],
-                                                            ori_in_cam_base_link=[-1.57, 0, 3.14])
-        self.rm_sys.create_virtual_cams(60)
-        # 设置机械臂-物理相机的tcp坐标
-        for _ in range(100):
-            self.step_simulation()
-        ee_pos, ee_orn = p.getLinkState(robot_id, 6,physicsClientId=self.physics_client)[4:6]
-        tcp_pos, tcp_orn = p.getLinkState(self.camera.id_robot, 3,physicsClientId=self.physics_client)[4:6]  # RGB_Link
-        tcp_in_ee_matrix = self.robot_list[0].TAB_with_AinW_and_BinW(tcp_pos, tcp_orn, ee_pos, ee_orn)
-        self.robot_list[0].add_tcp("RGB_camera", tcp_in_ee_matrix)
+        # # 绑定相机到机械臂
+        # self.rm_sys.camera = self.camera
+        # self.robot_list[0].id_end_effector = 7
+        # self.camera_constraint = self.rm_sys.bind_cam2robot(self.robot_list[0], self.camera,
+        #                                                     pos_in_robot_end_link=[0, -0.05, -0.00358],
+        #                                                     pos_in_cam_base_link=[0, 0, 0],
+        #                                                     ori_in_cam_base_link=[-1.57, 0, 3.14])
+        # self.rm_sys.create_virtual_cams(60)
+        # # 设置机械臂-物理相机的tcp坐标
+        # for _ in range(100):
+        #     self.step_simulation()
+        # ee_pos, ee_orn = p.getLinkState(robot_id, 6,physicsClientId=self.physics_client)[4:6]
+        # tcp_pos, tcp_orn = p.getLinkState(self.camera.id_robot, 3,physicsClientId=self.physics_client)[4:6]  # RGB_Link
+        # tcp_in_ee_matrix = self.robot_list[0].TAB_with_AinW_and_BinW(tcp_pos, tcp_orn, ee_pos, ee_orn)
+        # self.robot_list[0].add_tcp("RGB_camera", tcp_in_ee_matrix)
 
 
 

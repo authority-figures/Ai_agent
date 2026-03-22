@@ -69,13 +69,13 @@ class SimulationEnvironment:
         machine_file_name = os.path.join(self.base_path, machine_file_name)
         robot_urdf = r"./models/jaka_description/urdf/jaka_minicobo.urdf"
         robot_urdf = os.path.join(self.base_path, robot_urdf)
-        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_10mm.urdf"
+        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm_len248dot37mm.urdf"
         robot_with_rolling_tool_urdf = os.path.join(self.base_path, robot_with_rolling_tool_urdf)
         machine = Machine(self.physics_client)
         self.machine = machine
         machine.load_urdf(fileName=machine_file_name, basePosition=(0, 0, 0), useFixedBase=1, flags=0, )
         self.object_list.append(self.machine.id_robot)
-        self.workpiece_pose = [0.0, 0.06, 0.02]
+        self.workpiece_pose = [0.0, 0.15, 0.04]
         orientation = [0.0, 0.0, 0.0]
         quaternion = p.getQuaternionFromEuler(orientation)
         self.workpiece_orientation = quaternion
@@ -83,7 +83,7 @@ class SimulationEnvironment:
                                                              orientation=orientation)
 
         # self.object_list.append(self.workpiece_id)
-        robot_id = self.load_robot(urdf_path=robot_with_rolling_tool_urdf, basePosition=(-0.15, -0.15, 0.7), baseOrientation=(0.7,0,0,0.7),useFixedBase=0,
+        robot_id = self.load_robot(urdf_path=robot_with_rolling_tool_urdf, basePosition=(-0.16, -0.15, 0.7), baseOrientation=(0.7,0,0,0.7),useFixedBase=0,
                             start=[0, 0, PI / 2, 0, 0, 0], )
         # 消除执行器于机械臂末端的碰撞
         p.setCollisionFilterPair(robot_id, robot_id, 5, 7, 0)
@@ -115,7 +115,8 @@ class SimulationEnvironment:
 
         # 绑定机床到机械臂
         self.rm_sys.init_machine(machine, type='velocity')
-        self.rm_sys.create_constrain(machine,self.robot_list[0],parentPosition=[-0.2, +0.1, 0.08], childOrientation=[0.7068252, 0, 0, 0.7073883]
+        # 因为设计的装置太长了，需要把机械臂往后移动100mm
+        self.rm_sys.create_constrain(machine,self.robot_list[0],parentPosition=[-0.18, +0.1 -0.1, 0.12], childOrientation=[0.7068252, 0, 0, 0.7073883]
                                      ,workpiece_pos=self.workpiece_pose,workpiece_ori=self.workpiece_orientation)
         self.rm_sys.init_robot(self.robot_list[0])
 
@@ -523,624 +524,10 @@ scene_config2={
 planners = ["RRTConnect", "PRM", "RRTstar",  "Ours"]
 
 
-def planning(
-    sim_env: SimulationEnvironment,
-    start,
-    goal,
-    name,
-    repeat: int = 100,
-    seed: int = 0,
-    # 起点扰动强度：按“关节空间”理解就是 rad；按“笛卡尔/位姿”则要你自己改
-    start_noise_std: float = 1e-3,
-    # 你如果不想所有维度都扰动，可以只扰动前 n 个
-    noise_dims: int | None = None,
-):
-    """
-    repeat 次规划；每次对起始关节状态加伪随机微扰，记录所有结果。
-    返回: results(list[dict]), summary(dict)
-    """
 
-    planner_name = name
 
-    # ---- 固定环境/采样参数（每次一样）----
-    sim_env.robot_list[0].set_state(start)
 
-    sim_env.pb_ompl_interface.get_T_goal(goal, tcp_name="rolling_tool")
-    sim_env.pb_ompl_interface.z_range = (0.01, 0.15)  # z-axis range for sampling
-    sim_env.pb_ompl_interface.x_range = (-0.005, 0.005)
-    sim_env.pb_ompl_interface.y_range = (-0.001, 0.001)
-    sim_env.pb_ompl_interface.yaw_range = 3
-    sim_env.pb_ompl_interface.roll_range = 1
-    sim_env.pb_ompl_interface.pitch_range = 1
 
-    if name == "Ours":
-        sim_env.pb_ompl_interface.set_tsRRT_sample()
-        sim_env.pb_ompl_interface.space.state_sampler.ratio = 0.3
-        planner_name = "RRTConnect"
-    else:
-        sim_env.pb_ompl_interface.set_random_sample()
-
-    sim_env.pb_ompl_interface.set_planner(planner_name)
-
-    # ---- 伪随机发生器（可复现实验）----
-    rng = np.random.default_rng(seed)
-
-    # ---- 基准起点（不要用“规划前 robot 当前状态”反复叠加噪声，否则会漂移）----
-    base_start = np.array(start, dtype=float)
-    dim = len(base_start)
-    if noise_dims is None:
-        noise_dims = dim
-    noise_dims = min(noise_dims, dim)
-
-
-
-    results = []
-
-    for k in range(repeat):
-        # ---- 生成起点微扰（只扰动前 noise_dims 个维度；其他维度不动）----
-        noise = np.zeros(dim, dtype=float)
-        noise[:noise_dims] = rng.normal(loc=0.0, scale=start_noise_std, size=noise_dims)
-        start_k = base_start + noise
-
-
-        # 每次规划前，明确把机器人设置到本次起点
-        sim_env.robot_list[0].set_state(start_k.tolist())
-
-        # 有些系统里 interface 内部会读“当前机器人状态”作为 start，
-        # 你这里原来是：start = robot.get_cur_state()，我保留这个逻辑：
-        start_state = sim_env.pb_ompl_interface.robot.get_cur_state()
-
-        # 1) 清空旧解（非常关键）
-        try:
-            sim_env.pb_ompl_interface.ss.getProblemDefinition().clearSolutionPaths()
-        except Exception:
-            pass
-
-        # 2) 清空 planner 的树/图数据结构
-        try:
-            sim_env.pb_ompl_interface.ss.getPlanner().clear()
-        except Exception:
-            pass
-
-        # --- 关键改动：显式碰撞预检 ---
-        # 检查起点有效性
-        if not sim_env.pb_ompl_interface.is_state_valid(start_state):
-            print(f"Trial {k}: Skipping - Start state in collision.")
-            results.append({
-                "trial": k, "name": name, "success": False,
-                "reason": "invalid_start", "solved_time": 0, "total_states": 0
-            })
-            continue
-
-        # 检查终点有效性（假设 goal 在循环中可能变化或未经验证）
-        if not sim_env.pb_ompl_interface.is_state_valid(goal):
-            print(f"Trial {k}: Skipping - Goal state in collision.")
-            results.append({
-                "trial": k, "name": name, "success": False,
-                "reason": "invalid_goal", "solved_time": 0, "total_states": 0
-            })
-            continue
-
-
-        res, ori_path, path, solved_time, total_states = sim_env.pb_ompl_interface.plan_start_goal(
-            start_state,
-            goal,
-            allowed_time=DEFAULT_PLANNING_TIME,
-            ret_all=True,
-        )
-
-
-        results.append({
-            "trial": k,
-            "name": name,  # 原始标签（Ours / RRTConnect / ...）
-            "success": bool(res),
-            "solved_time": solved_time,     # 你接口返回的“规划器时间”
-            "total_states": total_states,
-            "start": start_k.tolist(),
-            "noise": noise.tolist(),
-            "ori_path": ori_path,
-            "path": path,
-        })
-
-    # ---- 汇总统计（方便你直接画表/写论文）----
-    succ = [r for r in results if r["success"]]
-    summary = {
-        "name": name,
-        "repeat": repeat,
-        "success_count": len(succ),
-        "success_rate": len(succ) / repeat if repeat > 0 else 0.0,
-        "solved_time_mean": float(np.mean([r["solved_time"] for r in succ])) if succ else None,
-        "solved_time_std": float(np.std([r["solved_time"] for r in succ])) if succ else None,
-        "total_states_mean": float(np.mean([r["total_states"] for r in succ])) if succ else None,
-        "total_states_std": float(np.std([r["total_states"] for r in succ])) if succ else None,
-    }
-
-    return results, summary
-
-def planning_2(
-    sim_env: SimulationEnvironment,
-    start,
-    goal,
-    name,
-    repeat: int = 100,
-    seed: int = 0,
-    start_noise_std: float = 1e-3,
-    noise_dims: int | None = None,
-    max_consecutive_failures: int | None = None,   # 新增：连续失败阈值
-    fill_remaining_with_last_failure: bool = True, # 新增：是否补齐
-):
-    """
-    repeat 次规划；每次对起始关节状态加伪随机微扰，记录所有结果。
-    支持：对同一目标点连续失败若干次后提前终止，并用最后一次失败结果补齐后续 trial。
-    返回: results(list[dict]), summary(dict)
-    """
-
-    planner_name = name
-
-    # ---- 固定环境/采样参数（每次一样）----
-    sim_env.robot_list[0].set_state(start)
-
-    sim_env.pb_ompl_interface.get_T_goal(goal, tcp_name="rolling_tool")
-    sim_env.pb_ompl_interface.z_range = (0.01, 0.15)
-    sim_env.pb_ompl_interface.x_range = (-0.005, 0.005)
-    sim_env.pb_ompl_interface.y_range = (-0.001, 0.001)
-    sim_env.pb_ompl_interface.yaw_range = 3
-    sim_env.pb_ompl_interface.roll_range = 10
-    sim_env.pb_ompl_interface.pitch_range = 10
-
-    if name == "Ours":
-        sim_env.pb_ompl_interface.set_tsRRT_sample()
-        sim_env.pb_ompl_interface.space.state_sampler.ratio = 0.3
-        planner_name = "RRTConnect"
-    else:
-        sim_env.pb_ompl_interface.set_random_sample()
-
-    sim_env.pb_ompl_interface.set_planner(planner_name)
-
-    rng = np.random.default_rng(seed)
-
-    base_start = np.array(start, dtype=float)
-    dim = len(base_start)
-    if noise_dims is None:
-        noise_dims = dim
-    noise_dims = min(noise_dims, dim)
-
-    results = []
-    consecutive_failures = 0
-    last_failure_record = None
-    executed_trials = 0  # 真正执行的 trial 数
-
-    # ---- 固定 goal，可提前做一次预检，避免每次循环重复检查 ----
-    if not sim_env.pb_ompl_interface.is_state_valid(goal):
-        print("Goal state is invalid. Skip all trials for this target.")
-        fail_record = {
-            "trial": 0,
-            "name": name,
-            "success": False,
-            "reason": "invalid_goal",
-            "solved_time": 0.0,
-            "total_states": 0,
-            "start": None,
-            "noise": None,
-            "ori_path": None,
-            "path": None,
-            "early_stop": True,
-            "synthetic_fill": False,
-            "filled_from_trial": None,
-        }
-        results.append(fail_record)
-
-        # 补齐剩余 trial
-        for t in range(1, repeat):
-            rec = fail_record.copy()
-            rec["trial"] = t
-            rec["synthetic_fill"] = True
-            rec["filled_from_trial"] = 0
-            results.append(rec)
-
-        summary = {
-            "name": name,
-            "repeat": repeat,
-            "executed_trials": 0,
-            "early_stopped": True,
-            "success_count": 0,
-            "success_rate": 0.0,
-            "solved_time_mean": None,
-            "solved_time_std": None,
-            "total_states_mean": None,
-            "total_states_std": None,
-        }
-        return results, summary
-
-    for k in range(repeat):
-        # ---- 若达到连续失败阈值，则提前停止并补齐 ----
-        if (
-            max_consecutive_failures is not None
-            and consecutive_failures >= max_consecutive_failures
-        ):
-            print(
-                f"Early stop: target failed consecutively "
-                f"{consecutive_failures} times. Fill remaining trials."
-            )
-
-            if fill_remaining_with_last_failure and last_failure_record is not None:
-                for t in range(k, repeat):
-                    rec = last_failure_record.copy()
-                    rec["trial"] = t
-                    rec["early_stop"] = True
-                    rec["synthetic_fill"] = True
-                    rec["filled_from_trial"] = last_failure_record["trial"]
-                    results.append(rec)
-            break
-
-        # ---- 生成起点微扰 ----
-        noise = np.zeros(dim, dtype=float)
-        noise[:noise_dims] = rng.normal(loc=0.0, scale=start_noise_std, size=noise_dims)
-        start_k = base_start + noise
-
-        sim_env.robot_list[0].set_state(start_k.tolist())
-        start_state = sim_env.pb_ompl_interface.robot.get_cur_state()
-
-        # 清空旧解
-        try:
-            sim_env.pb_ompl_interface.ss.getProblemDefinition().clearSolutionPaths()
-        except Exception:
-            pass
-
-        # 清空 planner 数据
-        try:
-            sim_env.pb_ompl_interface.ss.getPlanner().clear()
-        except Exception:
-            pass
-
-        executed_trials += 1
-
-        # ---- 起点预检 ----
-        if not sim_env.pb_ompl_interface.is_state_valid(start_state):
-            print(f"Trial {k}: Skipping - Start state in collision.")
-            record = {
-                "trial": k,
-                "name": name,
-                "success": False,
-                "reason": "invalid_start",
-                "solved_time": 0.0,
-                "total_states": 0,
-                "start": start_k.tolist(),
-                "noise": noise.tolist(),
-                "ori_path": None,
-                "path": None,
-                "early_stop": False,
-                "synthetic_fill": False,
-                "filled_from_trial": None,
-            }
-            results.append(record)
-            consecutive_failures += 1
-            last_failure_record = record.copy()
-            continue
-
-        # ---- 正式规划 ----
-        try:
-            res, ori_path, path, solved_time, total_states = sim_env.pb_ompl_interface.plan_start_goal(
-                start_state,
-                goal,
-                allowed_time=DEFAULT_PLANNING_TIME,
-                ret_all=True,
-            )
-
-            success = bool(res)
-            record = {
-                "trial": k,
-                "name": name,
-                "success": success,
-                "reason": None if success else "planner_failed",
-                "solved_time": solved_time,
-                "total_states": total_states,
-                "start": start_k.tolist(),
-                "noise": noise.tolist(),
-                "ori_path": ori_path,
-                "path": path,
-                "early_stop": False,
-                "synthetic_fill": False,
-                "filled_from_trial": None,
-            }
-            results.append(record)
-
-            if success:
-                consecutive_failures = 0
-                last_failure_record = None
-            else:
-                consecutive_failures += 1
-                last_failure_record = record.copy()
-
-        except Exception as e:
-            print(f"Trial {k}: Exception during planning: {e}")
-            record = {
-                "trial": k,
-                "name": name,
-                "success": False,
-                "reason": f"exception: {e}",
-                "solved_time": 0.0,
-                "total_states": 0,
-                "start": start_k.tolist(),
-                "noise": noise.tolist(),
-                "ori_path": None,
-                "path": None,
-                "early_stop": False,
-                "synthetic_fill": False,
-                "filled_from_trial": None,
-            }
-            results.append(record)
-            consecutive_failures += 1
-            last_failure_record = record.copy()
-
-    # 如果因为 break 提前结束，但没补够（例如 fill_remaining_with_last_failure=False）
-    while len(results) < repeat:
-        results.append({
-            "trial": len(results),
-            "name": name,
-            "success": False,
-            "reason": "not_executed_due_to_early_stop",
-            "solved_time": None,
-            "total_states": None,
-            "start": None,
-            "noise": None,
-            "ori_path": None,
-            "path": None,
-            "early_stop": True,
-            "synthetic_fill": True,
-            "filled_from_trial": None,
-        })
-
-    # ---- 汇总统计 ----
-    succ = [r for r in results if r["success"]]
-
-    summary = {
-        "name": name,
-        "repeat": repeat,                     # 目标上的总 trial 数（含补齐）
-        "executed_trials": executed_trials,   # 实际执行次数
-        "early_stopped": executed_trials < repeat,
-        "success_count": len(succ),
-        "success_rate": len(succ) / repeat if repeat > 0 else 0.0,
-        "solved_time_mean": float(np.mean([r["solved_time"] for r in succ])) if succ else None,
-        "solved_time_std": float(np.std([r["solved_time"] for r in succ])) if succ else None,
-        "total_states_mean": float(np.mean([r["total_states"] for r in succ])) if succ else None,
-        "total_states_std": float(np.std([r["total_states"] for r in succ])) if succ else None,
-    }
-
-    return results, summary
-
-
-def make_fk_fn(robot:Robot):
-    def fk_fn(q):
-
-        try:
-            pos, quat = robot.get_pos_ori_from_ik(q, tcp_name="rolling_tool")
-            return pos, quat
-        except Exception as e:
-            print(f"FK computation failed for q={q}: {e}")
-
-    return fk_fn
-
-def make_ik_fn(robot:Robot):
-    def ik_fn(pos, quat, seed=None):
-        q_sol = robot.get_state_from_ik(pos, quat, start=seed, tcp_name="rolling_tool")
-        if q_sol is None:
-            return None
-        return np.asarray(q_sol, dtype=float)
-    return ik_fn
-
-
-def planning_all_planners_for_sampled_targets():
-    out_dir = r"/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/datas/20260311"
-    target_npy = r"/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/datas/highlight_points.npy"
-
-    repeat_per_target = 10
-
-    sim_env = SimulationEnvironment()
-    sim_env.initialize()
-    sim_env.load_scene()
-    fk_fn = make_fk_fn(sim_env.robot_list[0])
-    ik_fn = make_ik_fn(sim_env.robot_list[0])
-    state_valid_fn = lambda q: sim_env.pb_ompl_interface.is_state_valid(q)
-    start = [1.57, 0, -1, 0, 0, 0]
-
-    sampled_targets = get_test_points()
-    print(f"Loaded sampled targets: {len(sampled_targets)}")
-
-    for scene_name in list(scene_config.keys())[1:2]:
-        print(f"=== Scene: {scene_name} ===")
-
-        # scene_name = "machine_state_B"
-        machine_state = scene_config[scene_name]
-        sim_env.machine.set_joints_states(machine_state)
-        sim_env.robot_list[0].set_state(start)
-        sim_env.robot_list[0].set_joints_states(start)
-        for _ in range(1000):
-            sim_env.step_simulation()
-
-        for _ in range(1000):
-            sim_env.step_simulation()
-            # time.sleep(sim_env.time_step)
-        time.sleep(2)
-
-        # 加载 100 个采样点（工件坐标系）
-        sampled_targets = get_test_points()
-        # 可选：汇总本场景所有点的 summary
-        all_point_summaries = []
-
-        # 每个 planner 单独收集全部目标点
-        for planner_name in [planners[0]]:
-            print(f"=== Planner: {planner_name} ===")
-            planner_point_results = []
-
-            for point_idx, (pos_wp, ori_wp) in enumerate(sampled_targets):
-                print(f"--- Target Point {point_idx:03d} / {len(sampled_targets)} ---")
-
-                # 先求该点对应的 goal
-                try:
-                    pos_rb, ori_rb = sim_env.rm_sys.get_point_in_workpiece2robot(pos_wp, ori_wp)
-                    goal = sim_env.robot_list[0].get_state_from_ik(pos_rb, ori_rb, start=None,
-                                                                   maxNumIteration=10000, tcp_name="rolling_tool")
-                    # goal, stats = expand_goal_states_nearby(
-                    #     goal_q=goal,
-                    #     fk_fn=fk_fn,
-                    #     ik_fn=ik_fn,
-                    #     state_valid_fn=state_valid_fn,
-                    #     sampler="rpy",
-                    #     sample_mode="random",
-                    #     num_orientation_samples=200,
-                    #     random_seed=42,
-                    #     roll_range_deg=30,
-                    #     pitch_range_deg=30,
-                    #     yaw_range_deg=30,
-                    #     max_joint_dev=1,
-                    #     max_samples=1,
-                    #     ik_seed_mode="goal",
-                    #     unique_tol=1e-2,
-                    #     verbose=True
-                    # )
-                    # goal = goal[0]  # 只取第一个（也是唯一一个）
-
-                except Exception as e:
-                    print(f"[Skip] IK failed for point {point_idx:03d}: {e}")
-                    planner_point_results.append({
-                        "point_idx": point_idx,
-                        "ik_success": False,
-                        "goal_pos_workpiece": pos_wp,
-                        "goal_ori_workpiece": ori_wp,
-                        "error": str(e),
-                        "results": None,
-                        "summary": None,
-                    })
-                    continue
-
-                # 再做该 planner 的 10 次规划
-                try:
-                    # results, summary = planning(
-                    #     sim_env,
-                    #     start,
-                    #     goal,
-                    #     planner_name,
-                    #     repeat=repeat_per_target
-                    # )
-
-                    results, summary = planning_2(
-                        sim_env,
-                        start,
-                        goal,
-                        planner_name,
-                        repeat=repeat_per_target,
-                        max_consecutive_failures=3,  # 例如连续失败 3 次就早停
-                        fill_remaining_with_last_failure=True,
-                    )
-
-                    planner_point_results.append({
-                        "point_idx": point_idx,
-                        "ik_success": True,
-                        "goal": goal,
-                        "goal_pos_workpiece": pos_wp,
-                        "goal_ori_workpiece": ori_wp,
-                        "goal_pos_robot": pos_rb,
-                        "goal_ori_robot": ori_rb,
-                        "results": results,  # 这里面是 10 次 trial 的完整明细
-                        "summary": summary,
-                    })
-
-                except Exception as e:
-                    print(f"[Skip] Planning failed for point {point_idx:03d}, planner={planner_name}: {e}")
-                    planner_point_results.append({
-                        "point_idx": point_idx,
-                        "ik_success": True,
-                        "goal": goal,
-                        "goal_pos_workpiece": pos_wp,
-                        "goal_ori_workpiece": ori_wp,
-                        "goal_pos_robot": pos_rb,
-                        "goal_ori_robot": ori_rb,
-                        "error": str(e),
-                        "results": None,
-                        "summary": None,
-                    })
-
-            # 这里才保存：一个 planner 一个 npz，包含所有目标点
-            meta = {
-                "scene_name": scene_name,
-                "planner_name": planner_name,
-                "repeat_per_target": repeat_per_target,
-                "num_targets": len(sampled_targets),
-                "start": start,
-                "DEFAULT_PLANNING_TIME": DEFAULT_PLANNING_TIME,
-            }
-
-            save_planner_results_all_targets_npz(
-                out_dir,
-                scene_name,
-                planner_name,
-                planner_point_results,
-                extra_meta=meta
-            )
-
-def save_planner_results_all_targets_npz(out_dir, scene_name, planner_name, planner_point_results, *, extra_meta=None):
-    os.makedirs(out_dir, exist_ok=True)
-    date = time.strftime("%Y%m%d%H%M%S")
-    out_path = os.path.join(out_dir, f"06mm_{scene_name}_{planner_name}_{date}.npz")
-
-    # 便于快速统计的定长字段
-    point_idx = np.array([r["point_idx"] for r in planner_point_results], dtype=int)
-    ik_success = np.array([r["ik_success"] for r in planner_point_results], dtype=bool)
-
-    success_count = np.array([
-        r["summary"]["success_count"] if r.get("summary") is not None else -1
-        for r in planner_point_results
-    ], dtype=int)
-
-    success_rate = np.array([
-        r["summary"]["success_rate"] if r.get("summary") is not None else np.nan
-        for r in planner_point_results
-    ], dtype=float)
-
-    solved_time_mean = np.array([
-        r["summary"]["solved_time_mean"] if r.get("summary") is not None and r["summary"]["solved_time_mean"] is not None else np.nan
-        for r in planner_point_results
-    ], dtype=float)
-
-    total_states_mean = np.array([
-        r["summary"]["total_states_mean"] if r.get("summary") is not None and r["summary"]["total_states_mean"] is not None else np.nan
-        for r in planner_point_results
-    ], dtype=float)
-
-    # 完整明细（每个点里仍然包含 10 次 results）
-    point_results_obj = np.array(planner_point_results, dtype=object)
-
-    # planner 级汇总
-    valid = [r for r in planner_point_results if r["ik_success"] and r.get("summary") is not None]
-    planner_summary = {
-        "scene_name": scene_name,
-        "planner_name": planner_name,
-        "num_targets": len(planner_point_results),
-        "ik_success_count": int(np.sum(ik_success)),
-        "ik_success_rate": float(np.mean(ik_success)) if len(ik_success) > 0 else 0.0,
-        "avg_point_success_rate": float(np.mean([r["summary"]["success_rate"] for r in valid])) if valid else None,
-        "avg_point_solved_time_mean": float(np.mean([
-            r["summary"]["solved_time_mean"] for r in valid
-            if r["summary"]["solved_time_mean"] is not None
-        ])) if valid else None,
-    }
-
-    np.savez_compressed(
-        out_path,
-        point_idx=point_idx,
-        ik_success=ik_success,
-        success_count=success_count,
-        success_rate=success_rate,
-        solved_time_mean=solved_time_mean,
-        total_states_mean=total_states_mean,
-        point_results=point_results_obj,          # 完整数据
-        planner_summary=np.array(planner_summary, dtype=object),
-        meta=np.array(extra_meta, dtype=object),
-    )
-
-    print(f"[Saved planner npz] {out_path}")
-    return out_path
 
 
 
@@ -1412,7 +799,7 @@ def highlight_points():
     sim_env.initialize()
     sim_env.load_scene()
 
-    machine_state = scene_config["machine_state_C"]
+    machine_state = scene_config["machine_state_A"]
     sim_env.machine.set_joints_states(machine_state)
     for _ in range(100):
         sim_env.step_simulation()
@@ -1482,12 +869,14 @@ def highlight_points():
     # sim_env.move_robot(sim_env.robot_list[0].id_robot, goal)
     sim_env.robot_list[0].set_joints_states(goal)
 
+    start = [0.10568717528231546, -0.4105353654619583, -1.1813494586720104, 0.03241272300551933, -1.8410220234890533, -0.6757545624540242]
     for _ in range(100):
         sim_env.step_simulation()
         joints = sim_env.robot_list[0].get_state_from_ik(target_points_in_robot_sys[_][0],
                                                                                         target_points_in_robot_sys[_][1],
-                                                     start=None, maxNumIteration=10000, tcp_name="rolling_tool")
+                                                     start=start, maxNumIteration=10000, tcp_name="rolling_tool")
         sim_env.robot_list[0].set_joints_states(joints)
+        print(f"Moving to point {_}, joints: {joints}")
         # collision
         safe = sim_env.pb_ompl_interface.is_state_valid(joints)
         if not safe:
@@ -1518,25 +907,31 @@ def test_point():
     sim_env.initialize()
     sim_env.load_scene()
 
-    hilight_points = get_test_points()
-    target_point_in_robot_sys_list,joints_list = [],[]
-    for i in range(len(hilight_points)):
-        target_point_in_robot_sys = sim_env.rm_sys.get_point_in_workpiece2robot(hilight_points[i][0], hilight_points[i][1])
-        target_point_in_robot_sys_list.append(target_point_in_robot_sys)
-        joints = sim_env.robot_list[0].get_state_from_ik(target_point_in_robot_sys[0], target_point_in_robot_sys[1],
-                                                         start=None, maxNumIteration=10000, tcp_name="rolling_tool")
-        joints_list.append(joints)
 
-    start = [1.57, 0, -1, 0, 0, 0, ]
+    point_in_workpiece = [0.01965,-0.05525,0.22536]
+    ori_in_workpiece = [-0.1032456671688744, 0.6995286500286133, 0.6995286500286133, -0.1032456671688744]
+    target_point_in_robot_sys = sim_env.rm_sys.get_point_in_workpiece2robot(point_in_workpiece, ori_in_workpiece)
 
-    # target_point_in_robot_sys = sim_env.rm_sys.get_point_in_workpiece2robot((0,-0.3,0.5),(0,0,0, 1))
+    start_eve = [0.10568717528231546, -0.4105353654619583, -1.1813494586720104, 0.03241272300551933, -1.8410220234890533,
+             -0.6757545624540242]
 
-    goal = joints_list[82]
+    goal = sim_env.robot_list[0].get_state_from_ik(target_point_in_robot_sys[0], target_point_in_robot_sys[1],
+                                                   start=start_eve, maxNumIteration=10000, tcp_name="rolling_tool")
+    print("goal",goal)
+    path = np.load(
+        "/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/path_files/滚压_path.npy")
+
+    start_point_in_robot_sys = sim_env.rm_sys.get_point_in_workpiece2robot([0.0,-0.090,0.040], [ 0, 0.7071068, 0.7071068, 0 ])
+    start = sim_env.robot_list[0].get_state_from_ik(start_point_in_robot_sys[0], start_point_in_robot_sys[1],
+                                                   start=start_eve,
+                                                    maxNumIteration=10000, tcp_name="rolling_tool")
+    print("start",start)
     # 设置机械臂/机床的初始位置
     sim_env.robot_list[0].set_state(start)
     sim_env.robot_list[0].set_joints_states(start)
-    machine_state = scene_config["machine_state_C"]
+    machine_state = scene_config["machine_state_A"]
     sim_env.machine.set_joints_states(machine_state)
+    time.sleep(2)
 
     # sim_env.move_robot(sim_env.robot_list[0].id_robot, goal)
     sim_env.robot_list[0].set_joints_states(goal)
@@ -1580,17 +975,21 @@ def test_point():
     if res:
         sim_env.pb_ompl_interface.execute(path, dynamics=True)
 
-
-
-def main():
-
+from tqdm import tqdm
+def export_path():
     sim_env = SimulationEnvironment()
     sim_env.initialize()
     sim_env.load_scene()
 
-    file_path = r'/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/path_files/滚压到位点_6061_C轴连续加工.cls'
+    machine_state = scene_config["machine_state_A"]
+    sim_env.machine.set_joints_states(machine_state)
+    for _ in range(100):
+        sim_env.step_simulation()
 
-    goto = sim_env.rm_sys.read_cls_file(sim_env.robot_list[0],file_path, inverse=True)
+    file_path = r'/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/path_files/6061_A_01mm.cls'
+
+    goto, origin_data = sim_env.rm_sys.read_cls_file(sim_env.robot_list[0], file_path, inverse=True)
+
     pos_list, ori_list = [], []
     for item in goto:
         # 解包位置信息pos (X/Y/Z)
@@ -1598,85 +997,46 @@ def main():
         # 解包姿态信息ori (x/y/z/w)
         ori_list.append((item['O']['x'], item['O']['y'], item['O']['z'], item['O']['w']))
 
+    coordinates = [item[0] for item in origin_data]
+    selected_idx, grid_selected, rect_info = sample_rect_grid_points(
+        coordinates,
+        center_idx=None,
+        width=0.10,
+        height=0.15,
+        nx=10,
+        ny=10,
+        use_pca=True,
+        auto_center=True,
+        ref_right=(-1.0, 0.0, 0.0),  # 全局 X 作为“右”
+        ref_up=(0.0, 0.0, 1.0),  # 全局 Z 作为“上”
+        strict_cell=False  # 允许空格回填，尽量凑满 100 个
+    )
+    # highlight_points = [(origin_data[i][0], origin_data[i][1]) for i in selected_idx]
+    # save_path = "./path_files/highlight_points.npy"
+    # np.save(save_path, np.array(highlight_points, dtype=object), allow_pickle=True)
+    # print(f"Saved {len(highlight_points)} highlight points to {save_path}")
 
-    goto_joints = sim_env.robot_list[0].get_state_from_ik(pos_list[0], ori_list[0],
-                                                     start=None, maxNumIteration=10000, tcp_name="rolling_tool")
+    highlight_positions = [origin_data[i][0] for i in selected_idx]
 
-    target_j = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -0.7582]
-
-    start = [1.57, 0, -1, 0, 0, 0, ]
-    # start = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098+1.57, -0.7582-1.01229]
-    goal = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -0.7582-1.01229]  # 关节六于之前定义的0位置之间的偏差为现0=原0-1.01229
-    goal = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -1.77049]
-
-    target_point_in_robot_sys = sim_env.rm_sys.get_point_in_workpiece2robot((-0.003,-0.0,0.07),(0.0005629,0.706825,0.707388,0.0005633))
-
-    # target_point_in_robot_sys = sim_env.rm_sys.get_point_in_workpiece2robot((0,-0.3,0.5),(0,0,0, 1))
-    joints=sim_env.robot_list[0].get_state_from_ik(target_point_in_robot_sys[0],target_point_in_robot_sys[1],start=None,maxNumIteration=10000,tcp_name="rolling_tool")
-    goal = joints
-    # 设置机械臂/机床的初始位置
-    sim_env.robot_list[0].set_state(start)
-    sim_env.robot_list[0].set_joints_states(start)
-    machine_state = scene_config2["machine_state_B"]
-    sim_env.machine.set_joints_states(machine_state)
-
-    # sim_env.move_robot(sim_env.robot_list[0].id_robot, goal)
-    sim_env.robot_list[0].set_joints_states(goal)
-
-    for _ in range(100):
-        sim_env.step_simulation()
-        # time.sleep(sim_env.time_step)
-    time.sleep(2)
-
-
-    # 执行规划
-    sim_env.pb_ompl_interface.get_T_goal(goal,tcp_name="rolling_tool")
-    sim_env.pb_ompl_interface.z_range = (0.01, 0.2)  # z-axis range for sampling
-    sim_env.pb_ompl_interface.x_range = (-0.01,0.01)
-    sim_env.pb_ompl_interface.y_range = (-0.001,0.001)
-    sim_env.pb_ompl_interface.yaw_range = 10
-    sim_env.pb_ompl_interface.roll_range = 5
-    sim_env.pb_ompl_interface.pitch_range = 5
-    sim_env.pb_ompl_interface.set_tsRRT_sample()
-    sim_env.pb_ompl_interface.space.state_sampler.ratio=0.3
-    # sim_env.pb_ompl_interface.set_random_sample()
-    sim_env.pb_ompl_interface.set_planner("RRTConnect")
-    # sim_env.pb_ompl_interface.set_state_sampler(taskspaceRRT.MixedValidStateSampler(sim_env.pb_ompl_interface.si, sim_env.pb_ompl_interface.sample_in_task_space, ratio=0.8))
-    start = sim_env.pb_ompl_interface.robot.get_cur_state()
-    res, ori_path, path, solved_time, total_states = sim_env.pb_ompl_interface.plan_start_goal(start,goal,allowed_time=30,ret_all=True)
-
-
-    import threading
-    def run_simulation():
-        while True:
-            sim_env.step_simulation()
-            # sim_env.robot_list[0].show_link_sys(7, -1, 1)
-            time.sleep(sim_env.time_step)  # 控制仿真步进时间
-            sim_env.robot_list[0].show_link_sys(10, -1, 1, name="1")
-            sim_env.robot_list[0].show_link_sys(5, -1, 1, name="2")
-            sim_env.machine.workpiece.show_link_sys(-1, -1, 1, name="3")
-            # sim_env.rm_sys.update_cam_pos()
-
-    simulation_thread = threading.Thread(target=run_simulation, )
-    simulation_thread.start()
-    if res:
-        sim_env.pb_ompl_interface.execute(path, dynamics=True)
-
-
-def show_state():
-    sim_env = SimulationEnvironment()
-    sim_env.initialize()
-    sim_env.load_scene()
-
-    target_j = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -0.7582]
+    highlight_positions_in_world = []
+    sim_env.rm_sys.get_point_in_workpiece2world((0, 0, 0), (0, 0, 0, 1), workpiece=sim_env.machine.workpiece)
+    for pos in highlight_positions:
+        pos_in_world = sim_env.rm_sys.get_point_in_workpiece2world(pos, (0, 0, 0, 1))
+        highlight_positions_in_world.append(pos_in_world[0])
+    # 高亮显示（红色点）
+    p.addUserDebugPoints(
+        pointPositions=highlight_positions_in_world,
+        pointColorsRGB=[[1, 0, 0] for _ in highlight_positions],
+        pointSize=5,
+        lifeTime=0  # 0 表示常驻显示
+    )
+    # ================================
 
     start = [1.57, 0, -1, 0, 0, 0, ]
-    # start = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098+1.57, -0.7582-1.01229]
-    goal = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -0.7582 - 1.01229]  # 关节六于之前定义的0位置之间的偏差为现0=原0-1.01229
-    goal = [0.0272, 0.0179, -1.8492, 0.0019, -1.3098, -1.77049]
 
-    target_point_in_robot_sys = sim_env.rm_sys.get_point_in_workpiece2robot((-0.003, -0.0, 0.07),
-                                                                            (0.0005629, 0.706825, 0.707388, 0.0005633))
+    target_points_in_robot_sys = [(pos_list[i], ori_list[i]) for i in selected_idx]
+    target_point_in_robot_sys = target_points_in_robot_sys[50]
+
     # target_point_in_robot_sys = sim_env.rm_sys.get_point_in_workpiece2robot((0,-0.3,0.5),(0,0,0, 1))
     joints = sim_env.robot_list[0].get_state_from_ik(target_point_in_robot_sys[0], target_point_in_robot_sys[1],
                                                      start=None, maxNumIteration=10000, tcp_name="rolling_tool")
@@ -1684,17 +1044,47 @@ def show_state():
     # 设置机械臂/机床的初始位置
     sim_env.robot_list[0].set_state(start)
     sim_env.robot_list[0].set_joints_states(start)
-    machine_state = scene_config2["machine_state_B"]
-    sim_env.machine.set_joints_states(machine_state)
 
     # sim_env.move_robot(sim_env.robot_list[0].id_robot, goal)
     sim_env.robot_list[0].set_joints_states(goal)
 
-    for _ in range(100):
-        sim_env.step_simulation()
-        # time.sleep(sim_env.time_step)
-    time.sleep(2)
+    start = [0.10568717528231546, -0.4105353654619583, -1.1813494586720104, 0.03241272300551933, -1.8410220234890533,
+             -0.6757545624540242]
+    path = []
+    pairs = zip(pos_list[10000:], ori_list[10000:])
+    total_steps = min(len(pos_list[10000:]), len(ori_list[10000:]))
+    collision_detect = False
+    if collision_detect:
+        for i, (pos, ori) in enumerate(tqdm(pairs, total=total_steps, desc="Planning path")):
+            sim_env.step_simulation()
+            joints = sim_env.robot_list[0].get_state_from_ik(pos,
+                                                             ori,
+                                                             start=start, maxNumIteration=10000, tcp_name="rolling_tool")
+            sim_env.robot_list[0].set_joints_states(joints)
 
+            # print(f"Moving to point {pos}, joints: {joints}")
+            # collision
+            safe = sim_env.pb_ompl_interface.is_state_valid(joints)
+            if not safe:
+                print(f"Collision detected at step {len(path)} for joints: {joints}")
+                # time.sleep(1)
+
+            path.append(joints)
+            # time.sleep(0.1)
+    else:
+        start = start
+        for i, (pos, ori) in enumerate(tqdm(pairs, total=total_steps, desc="Planning path")):
+            joints = sim_env.robot_list[0].get_state_from_ik(pos,
+                                                             ori,
+                                                             start=start, maxNumIteration=10000,
+                                                             tcp_name="rolling_tool")
+            start = joints
+
+            path.append(joints)
+            # time.sleep(0.1)
+    np.save("./path_files/滚压_path_01mm_for_新装置.npy", np.array(path))
+    print(f"Saved executed path with {len(path)} points to ./path_files/滚压_path_01mm_for_新装置.npy")
+    time.sleep(2)
 
     import threading
     def run_simulation():
@@ -1710,11 +1100,62 @@ def show_state():
     simulation_thread = threading.Thread(target=run_simulation, )
     simulation_thread.start()
 
-    pass
+
+def debug_path():
+    sim_env = SimulationEnvironment()
+    sim_env.initialize()
+    sim_env.load_scene()
+
+    machine_state = scene_config["machine_state_A"]
+    sim_env.machine.set_joints_states(machine_state)
+    for _ in range(100):
+        sim_env.step_simulation()
+
+    joints = np.load("/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/path_files/滚压_path_01mm_for_新装置.npy")
+
+    goal = joints[789]
+    # 设置机械臂/机床的初始位置
+    start = [0.10568717528231546, -0.4105353654619583, -1.1813494586720104, 0.03241272300551933, -1.8410220234890533,
+             -0.6757545624540242]
+    sim_env.robot_list[0].set_state(start)
+    sim_env.robot_list[0].set_joints_states(start)
+
+    # sim_env.move_robot(sim_env.robot_list[0].id_robot, goal)
+    sim_env.robot_list[0].set_joints_states(goal)
+
+    import threading
+    def run_simulation():
+        while True:
+            sim_env.step_simulation()
+            # sim_env.robot_list[0].show_link_sys(7, -1, 1)
+            time.sleep(sim_env.time_step)  # 控制仿真步进时间
+            sim_env.robot_list[0].show_link_sys(10, -1, 1, name="1")
+            sim_env.robot_list[0].show_link_sys(5, -1, 1, name="2")
+            sim_env.machine.workpiece.show_link_sys(-1, -1, 1, name="3")
+            # sim_env.rm_sys.update_cam_pos()
+
+    simulation_thread = threading.Thread(target=run_simulation, )
+    simulation_thread.start()
+
+    sim_env.robot_list[0].set_joints_states(goal)
+
+    for i,joint in enumerate(joints[789:]):
+
+        sim_env.robot_list[0].set_joints_states(joint)
+
+        # print(f"Moving to point {pos}, joints: {joints}")
+        # collision
+        safe = sim_env.pb_ompl_interface.is_state_valid(joint)
+        if not safe:
+            print(f"Collision detected at step {i} for joints: {joint}")
+            time.sleep(1)
+
+        time.sleep(1/240.)
+
+
 
 if __name__ == '__main__':
-    # planning_all_planners_for_sampled_targets()
-    # main()
-    test_point()
+    # test_point()
     # highlight_points()
-    # show_state()
+    # export_path()
+    debug_path()

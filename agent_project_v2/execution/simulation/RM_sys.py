@@ -526,7 +526,7 @@ class RM_sys:
                                     )
         pass
 
-    def read_cls_file(self,robot,cls_file_path,inverse=False,only_inverse_direction=False):
+    def read_cls_file(self, robot, cls_file_path, inverse=False, only_inverse_direction=False):
         """
         读取CLS文件并将其转换为字典格式，同时计算四元数。
 
@@ -539,6 +539,7 @@ class RM_sys:
         pattern = re.compile(r'GOTO/([\d\.\-]+),([\d\.\-]+),([\d\.\-]+),?([\d\.\-]*)?,?([\d\.\-]*)?,?([\d\.\-]*)?')
 
         result = []
+        origin_data = []
         last_data = [0, 0, 0, 1, 0, 0]
         for line in lines:
             match = pattern.match(line.strip())
@@ -553,19 +554,22 @@ class RM_sys:
                 last_data = [x, y, z, i, j, k]
 
                 # 计算四元数
-                quat = self.calculate_quaternion(i, j, k,inverse=inverse,only_inverse_direction=only_inverse_direction)
-                pos,ori = self.get_point_in_workpiece2robot([x/1000,y/1000,z/1000], [quat[1],quat[2],quat[3],quat[0],])
-                pos,ori = robot.calculate_ee_origin_from_target(pos, ori,
-                                                                   self.point_in_ee_frame,
-                                                                   self.robot_target_ori)
+                quat = self.calculate_quaternion(i, j, k, inverse=inverse,
+                                                 only_inverse_direction=only_inverse_direction)
+                pos, ori = self.get_point_in_workpiece2robot([x / 1000, y / 1000, z / 1000],
+                                                             [quat[1], quat[2], quat[3], quat[0], ])
+                # pos,ori = robot.calculate_ee_origin_from_target(pos, ori,
+                #                                                    self.point_in_ee_frame,
+                #                                                    self.robot_target_ori)
+                origin_data.append(([x / 1000, y / 1000, z / 1000], [quat[1], quat[2], quat[3], quat[0], ]))
                 result.append({
                     'X': pos[0],
                     'Y': pos[1],
                     'Z': pos[2],
-                    'O': {'x': ori[0], 'y': ori[1], 'z': ori[2],'w': ori[3], }
+                    'O': {'x': ori[0], 'y': ori[1], 'z': ori[2], 'w': ori[3], }
                 })
 
-        return result
+        return result, origin_data
     @staticmethod
     def calculate_quaternion(i, j, k,inverse=False,only_inverse_direction=False):
         """
