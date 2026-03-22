@@ -181,3 +181,35 @@ class CustomDigitalTwinEnv:
                 return response.json()
             else:
                 return {"status": "error", "message": "Failed to subscribe_robot_state"}
+
+    async def get_machine_axis_state(self):
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{self.base_url}/get_machine_axis_state")
+            if response.status_code == 200:
+                return response.json()
+            return {"status": "error", "message": "Failed to get_machine_axis_state"}
+
+    async def update_machine_axis_state(self, axis_values, maxVelocity=1):
+        request = MachineAxisRequest(target_axis_values=axis_values, maxVelocity=maxVelocity)
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{self.base_url}/update_machine_axis_state", json=request.to_dict(),
+                                         timeout=10)
+            if response.status_code == 200:
+                return response.json()
+            return {"status": "error", "message": "Failed to update_machine_axis_state"}
+
+    async def start_machine_axis_tcp_server(self, host="127.0.0.1", port=9101):
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{self.base_url}/start_machine_axis_tcp_server",
+                                         json={"host": host, "port": port})
+            if response.status_code == 200:
+                return response.json()
+            return {"status": "error", "message": "Failed to start_machine_axis_tcp_server"}
+
+    async def stop_machine_axis_tcp_server(self):
+        async with httpx.AsyncClient() as client:
+            response = await client.post(f"{self.base_url}/stop_machine_axis_tcp_server")
+            if response.status_code == 200:
+                return response.json()
+            return {"status": "error", "message": "Failed to stop_machine_axis_tcp_server"}
+

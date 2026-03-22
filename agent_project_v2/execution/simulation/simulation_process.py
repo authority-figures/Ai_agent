@@ -287,8 +287,6 @@ class CustomSimulationEnv:
             print(f"[CustomSimulationEnv:get_machine_axis_values] Exception: {e}")
             return {"status": "error", "message": str(e)}
 
-
-
     async def set_machine_axis_values(self, axis_values, maxVelocity=1):
         try:
             request = MachineAxisRequest(target_axis_values=axis_values, maxVelocity=maxVelocity)
@@ -303,4 +301,32 @@ class CustomSimulationEnv:
                 return {"status": "error", "message": "Failed to set_machine_axis_values"}
         except Exception as e:
             print(f"[CustomSimulationEnv:set_machine_axis_values] Exception: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def reset_machine_axis_values(self, axis_values):
+        try:
+            request = MachineAxisRequest(target_axis_values=axis_values)
+            async with httpx.AsyncClient() as client:
+                response = await client.post(
+                    f"{self.base_url}/reset_machine_axis_values",
+                    json=request.to_dict(),
+                    timeout=10,
+                )
+                if response.status_code == 200:
+                    return response.json()
+                return {"status": "error", "message": "Failed to reset_machine_axis_values"}
+        except Exception as e:
+            print(f"[CustomSimulationEnv:reset_machine_axis_values] Exception: {e}")
+            return {"status": "error", "message": str(e)}
+
+    async def get_DT_machine_axis_state(self):
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.post(f"http://localhost:8003/get_machine_axis_state")
+                if response.status_code == 200:
+                    return response.json()
+                else:
+                    return {"status": "error", "message": "Failed to get_DT_machine_axis_state"}
+        except Exception as e:
+            print(f"[simulation_process:CustomSimulationEnv:get_DT_machine_axis_state] Exception: {e}")
             return {"status": "error", "message": str(e)}

@@ -639,6 +639,8 @@ class MachineToolPage(QWidget):
         self._build_compact_machine_editor(layout)
         self.machine_axis_values_ready.connect(self._update_machine_axis_display)
         self.machine_axis_error.connect(self._show_machine_axis_error)
+        self.async_runner_for_synchronize_digital_twin_machine_state = AsyncRunner(self)
+        self.async_runner_for_synchronize_digital_twin_machine_state.finished.connect(self.handle_synchronize_DT_machine_result)
         self._init_machine_state_subscription()
 
     def _init_machine_state_subscription(self):
@@ -688,6 +690,11 @@ class MachineToolPage(QWidget):
         self.machine_set_btn.clicked.connect(self.on_set_machine_axis_values)
         compact_layout.addWidget(self.machine_set_btn, 1, len(self.AXES) + 1)
 
+        self.synchronize_DT_btn = QPushButton("同步DT", self)
+        self.synchronize_DT_btn.setMaximumWidth(72)
+        self.synchronize_DT_btn.clicked.connect(self.on_synchronize_DT_btn_clicked)
+        compact_layout.addWidget(self.synchronize_DT_btn, 2, len(self.AXES) + 1)
+
         compact_layout.addWidget(QLabel("偏置"), 2, 0)
         self.offset_inputs = {}
         for col, axis in enumerate(self.AXES, start=1):
@@ -696,20 +703,20 @@ class MachineToolPage(QWidget):
             self.offset_inputs[axis] = line_edit
             compact_layout.addWidget(line_edit, 2, col)
 
-        # offset_hint = QLabel("偏置示例：X=-100 时，发送值 = 输入值 - 100")
-        # compact_layout.addWidget(offset_hint, 2, len(self.AXES) + 1)
+        offset_hint = QLabel("偏置示例：X=-100 时，发送值 = 输入值 - 100")
+        compact_layout.addWidget(offset_hint, 3, 1, 1, len(self.AXES) + 1)
 
-        compact_layout.addWidget(QLabel("发送"), 3, 0)
+        compact_layout.addWidget(QLabel("发送"), 4, 0)
         self.machine_applied_value_label = QLabel("A=0.00000, C=0.00000, X=0.00000, Y=0.00000, Z=0.00000")
         self.machine_applied_value_label.setWordWrap(False)
-        compact_layout.addWidget(self.machine_applied_value_label, 3, 1, 1, len(self.AXES) + 1)
+        compact_layout.addWidget(self.machine_applied_value_label, 4, 1, 1, len(self.AXES) + 1)
 
-        compact_layout.addWidget(QLabel("当前"), 4, 0)
+        compact_layout.addWidget(QLabel("当前"), 5, 0)
         self.current_axis_display = LineEdit(type="output")
         self.current_axis_display.setReadOnly(True)
         self.current_axis_display.setFocusPolicy(Qt.NoFocus)
         self.current_axis_display.setText("等待仿真环境返回机床轴数据...")
-        compact_layout.addWidget(self.current_axis_display, 4, 1, 1, len(self.AXES) + 1)
+        compact_layout.addWidget(self.current_axis_display, 5, 1, 1, len(self.AXES) + 1)
 
         parent_layout.addWidget(compact_frame)
 
@@ -766,6 +773,19 @@ class MachineToolPage(QWidget):
         future.add_done_callback(self._handle_machine_set_result)
         self.current_axis_display.setText("正在设置机床 ACXYZ 轴值...")
         self.machine_applied_value_label.setText(", ".join([f"{axis}={value:.5f}" for axis, value in zip(self.AXES, target_values)]))
+
+    def on_synchronize_DT_btn_clicked(self):
+        """同步数字孪生中的机床状态到仿真环境。"""
+        if self.simulation_view is None:
+            self.current_axis_display.setText("未连接仿真视图，无法同步数字孪生机床状态。")
+            return
+        try:
+            coro = self.simulation_view.pybullet_process.env.get_DT_machine_axis_state()
+            self.async_runner_for_synchronize_digital_twin_machine_state.run(self.simulation_view.env_loop, coro)
+            self.current_axis_display.setText("正在同步数字孪生机床状态...")
+        except Exception as e:
+            self.current_axis_display.setText(f"同步数字孪生机床状态失败: {e}")
+            print(f"[MachineToolPage:on_synchronize_DT_btn_clicked] 同步数字孪生机床状态失败: {str(e)}")
 
     async def _subscribe_machine_state_async(self, on_subscribe):
         env = self.simulation_view.pybullet_process.env
@@ -826,6 +846,22 @@ class MachineToolPage(QWidget):
             return
 
         self.machine_axis_values_ready.emit(result)
+
+    def handle_synchronize_DT_machine_result(self, result):
+        status = result.get("status", None)
+        axis_values = result.get("axis_values", None)
+        if status == "success" and axis_values is not None:
+            future = asyncio.run_coroutine_threadsafe(
+                self.simulation_view.pybullet_process.env.reset_machine_axis_values(axis_values),
+                self.simulation_view.env_loop,
+            )
+            future.add_done_callback(self._handle_machine_set_result)
+            self.set_axis_inputs_from_values(axis_values)
+            print("[MachineToolPage] 同步数字孪生机床状态成功")
+        else:
+            message = result.get("message", "Unknown error")
+            self.current_axis_display.setText(f"同步数字孪生机床状态失败: {message}")
+            print("[MachineToolPage] 同步数字孪生机床状态失败:", message)
 
     def _update_machine_axis_display(self, result):
         axis_values = result.get("axis_values", [])

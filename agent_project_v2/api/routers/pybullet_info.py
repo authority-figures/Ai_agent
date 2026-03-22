@@ -637,7 +637,24 @@ async def set_machine_axis_values(request: MachineAxisRequest):
         return {"status": "error", "message": str(e)}
 
 
-
+@app.post("/reset_machine_axis_values")
+async def reset_machine_axis_values(request: MachineAxisRequest):
+    """API: 直接重置机床 ACXYZ 轴当前值。"""
+    try:
+        if not hasattr(sim_env, "machine") or sim_env.machine is None:
+            return {"status": "error", "message": "No machine loaded"}
+        if len(request.target_axis_values) != 5:
+            return {"status": "error", "message": "Machine axis values must contain exactly 5 numbers (A, C, X, Y, Z)"}
+        sim_env.machine.set_joints_states(request.target_axis_values)
+        return {
+            "status": "success",
+            "message": "Machine axis values reset",
+            "axis_labels": ["A", "C", "X", "Y", "Z"],
+            "axis_values": list(request.target_axis_values),
+        }
+    except Exception as e:
+        print("[execution:simulation:api:reset_machine_axis_values] Error resetting machine axis values:", e)
+        return {"status": "error", "message": str(e)}
 
 
 

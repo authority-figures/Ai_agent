@@ -286,6 +286,146 @@ async def get_tcp_pos_and_ori(request: GetPosOriRequest):
 
 
 
+def _normalize_machine_axis_values(payload):
+    if isinstance(payload, dict):
+        if "axis_values" in payload:
+            values = payload["axis_values"]
+        else:
+            values = [payload.get(axis) for axis in ["A", "C", "X", "Y", "Z"]]
+    elif isinstance(payload, list):
+        values = payload
+    else:
+        raise ValueError("Unsupported machine axis payload type")
+
+    if len(values) != 5:
+        raise ValueError("Machine axis values must contain exactly 5 numbers (A, C, X, Y, Z)")
+    return [float(value) for value in values]
+
+
+def _apply_dt_machine_axis_values(axis_values):
+    if not hasattr(DT_env, "machine") or DT_env.machine is None:
+        raise ValueError("No machine loaded")
+    DT_env.machine.set_joints_states(axis_values)
+    return axis_values
+
+
+@app.post("/get_machine_axis_state")
+async def get_machine_axis_state():
+    """API: 获取数字孪生中的机床 ACXYZ 状态。"""
+    try:
+        if not hasattr(DT_env, "machine") or DT_env.machine is None:
+            return {"status": "error", "message": "No machine loaded"}
+        axis_values = DT_env.machine.get_joints_states()
+        return {
+            "status": "success",
+            "axis_labels": ["A", "C", "X", "Y", "Z"],
+            "axis_values": list(axis_values),
+        }
+    except Exception as e:
+        print("[execution:digital_twin:api:get_machine_axis_state] Error getting machine axis state:", e)
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/update_machine_axis_state")
+async def update_machine_axis_state(request: MachineAxisRequest):
+    """API: 更新数字孪生环境中的机床 ACXYZ 状态。"""
+    try:
+        axis_values = _apply_dt_machine_axis_values(_normalize_machine_axis_values(request.target_axis_values))
+        return {
+            "status": "success",
+            "message": "Digital twin machine axis updated",
+            "axis_labels": ["A", "C", "X", "Y", "Z"],
+            "axis_values": list(axis_values),
+        }
+    except Exception as e:
+        print("[execution:digital_twin:api:update_machine_axis_state] Error updating machine axis state:", e)
+        return {"status": "error", "message": str(e)}
+
+
+machine_axis_tcp_server = None
+machine_axis_tcp_server_endpoint = {"host": "127.0.0.1", "port": 9101}
+
+
+async def _handle_machine_axis_tcp_client(reader, writer):
+    addr = writer.get_extra_info("peername")
+    print(f"[digital_twin_info] Machine axis TCP client connected: {addr}")
+    try:
+        while True:
+            raw_data = await reader.readline()
+            if not raw_data:
+                break
+            message = raw_data.decode("utf-8").strip()
+            if not message:
+                continue
+            try:
+                payload = json.loads(message)
+            except json.JSONDecodeError:
+                payload = [value.strip() for value in message.split(",") if value.strip()]
+
+            try:
+                axis_values = _apply_dt_machine_axis_values(_normalize_machine_axis_values(payload))
+                response = {
+                    "status": "success",
+                    "axis_labels": ["A", "C", "X", "Y", "Z"],
+                    "axis_values": list(axis_values),
+                }
+            except Exception as exc:
+                response = {"status": "error", "message": str(exc)}
+
+            writer.write((json.dumps(response, ensure_ascii=False) + "\n").encode("utf-8"))
+            await writer.drain()
+    finally:
+        writer.close()
+        await writer.wait_closed()
+        print(f"[digital_twin_info] Machine axis TCP client disconnected: {addr}")
+
+
+@app.post("/start_machine_axis_tcp_server")
+async def start_machine_axis_tcp_server(request: dict | None = None):
+    """API: 启动机床轴信息 TCP 接收服务。"""
+    try:
+        global machine_axis_tcp_server
+        request = request or {}
+        host = request.get("host", machine_axis_tcp_server_endpoint["host"])
+        port = int(request.get("port", machine_axis_tcp_server_endpoint["port"]))
+
+        if machine_axis_tcp_server is not None:
+            return {
+                "status": "success",
+                "message": "Machine axis TCP server already running",
+                "host": machine_axis_tcp_server_endpoint["host"],
+                "port": machine_axis_tcp_server_endpoint["port"],
+            }
+
+        machine_axis_tcp_server = await asyncio.start_server(_handle_machine_axis_tcp_client, host, port)
+        machine_axis_tcp_server_endpoint["host"] = host
+        machine_axis_tcp_server_endpoint["port"] = port
+        return {"status": "success", "message": "Machine axis TCP server started", "host": host, "port": port}
+    except Exception as e:
+        print("[execution:digital_twin:api:start_machine_axis_tcp_server] Error starting machine axis TCP server:", e)
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/stop_machine_axis_tcp_server")
+async def stop_machine_axis_tcp_server():
+    """API: 停止机床轴信息 TCP 接收服务。"""
+    try:
+        global machine_axis_tcp_server
+        if machine_axis_tcp_server is None:
+            return {"status": "error", "message": "Machine axis TCP server is not running"}
+        machine_axis_tcp_server.close()
+        await machine_axis_tcp_server.wait_closed()
+        machine_axis_tcp_server = None
+        return {"status": "success", "message": "Machine axis TCP server stopped"}
+    except Exception as e:
+        print("[execution:digital_twin:api:stop_machine_axis_tcp_server] Error stopping machine axis TCP server:", e)
+        return {"status": "error", "message": str(e)}
+
+
+
+
+
+
 
 
 
