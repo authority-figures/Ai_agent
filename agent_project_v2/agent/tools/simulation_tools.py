@@ -121,7 +121,7 @@ class PlanCollisionFreePathToolInput(BaseModel):
     )
     planner_name: str = Field(
         default="RRTConnect",
-        description='规划器名称，默认 "RRTConnect"。'
+        description='规划器名称，默认 "RRTConnect"。 还支持 "RRTConnect_Custom"、"RRTStar"、"PRM" '
     )
     allowed_time: float = Field(
         default=20.0,

@@ -57,14 +57,17 @@ def _plan_joint_path(request: PathPlanRequest):
     sim_env.robot_list[0].set_state(request.start_joints)
 
     if planner_name in {"RRTConnect_Custom", "RRTConnect"} and hasattr(planner, "get_T_goal") and hasattr(planner, "set_tsRRT_sample"):
-        planner.get_T_goal(request.target_joints, tcp_name="rolling_tool")
-        planner.z_range = (0.01, 0.2)
-        planner.x_range = (-0.01, 0.01)
-        planner.y_range = (-0.001, 0.001)
-        planner.yaw_range = 30
-        planner.roll_range = 5
-        planner.pitch_range = 5
-        planner.set_tsRRT_sample()
+        if planner_name == "RRTConnect_Custom":
+            planner.get_T_goal(request.target_joints, tcp_name="rolling_tool")
+            planner.z_range = (0.01, 0.2)
+            planner.x_range = (-0.01, 0.01)
+            planner.y_range = (-0.001, 0.001)
+            planner.yaw_range = 30
+            planner.roll_range = 5
+            planner.pitch_range = 5
+            planner.set_tsRRT_sample()
+        else:
+            planner.set_random_sample()
         planner.set_planner("RRTConnect")
         return planner.plan(request.target_joints, allowed_time=request.allowed_time)
 
@@ -416,7 +419,7 @@ async def get_rolling_path(request: RollingPathRequest):
         elif "区域4" in request.tool_path_name:
             tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域4.cls"
         elif "区域0" in request.tool_path_name:
-            tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域0.cls"
+            tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域0_起始点靠里面.cls"
         else:
             tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域1.cls"
 

@@ -8,10 +8,18 @@ import time
 
 
 
-llm = chatGPT_llm(model_name="gpt-4o-mini",temperature=0)
+llm = chatGPT_llm(model_name="gpt-4o",temperature=0)
 llm_with_tools = llm.bind_tools(using_tools)
-system_prompt = ("你是一个AI助理,负责依据task中制定的plan来执行对应的step，你可以使用工具来执行对应的步骤.若没有可用的工具完成任务，则回复任务无法完成，无合适工具。若任务所需参数不足，则回复参数不足\n"
-                 "请注意，你只需要按顺序执行每个step,每次只执行一个step，即在所有的step当中的第一个状态为pending的任务，当所有的step状态均不为pending后，你可回复任务执行完毕\n")
+# system_prompt = ("")
+
+system_prompt = f"""
+你是一个AI助理,负责依据task中制定的plan来执行对应的step，你可以使用工具来执行对应的步骤.若没有可用的工具完成任务，则回复任务无法完成，无合适工具。若任务所需参数不足，则回复参数不足
+请注意，你只需要按顺序执行每个step,每次只执行一个step，即在所有的step当中的第一个状态为pending的任务，当所有的step状态均不为pending后，你可回复任务执行完毕
+
+当你发现上一个执行日志结果中包含任务执行失败的情况时，你可以继续尝试重新执行该步骤（例如使用路径规划算法失败时，可以尝试换一个规划算法）
+
+"""
+
 
 class AgentNode:
     def __init__(self,config):

@@ -815,6 +815,8 @@ def test_goals():
     #     point_rgba=(1.0, 0.0, 0.0, 1.0)
     # )
 
+    np.save("./论文绘图数据/test_path.npy",path)
+
     import threading
     def run_simulation():
         while True:
@@ -829,7 +831,44 @@ def test_goals():
     simulation_thread = threading.Thread(target=run_simulation, )
     simulation_thread.start()
     if res:
-        sim_env.pb_ompl_interface.execute(path, dynamics=True)
+        sim_env.pb_ompl_interface.execute(path[:500], dynamics=True)
+
+
+
+def show_path():
+    sim_env = SimulationEnvironment()
+    sim_env.initialize()
+    sim_env.load_scene()
+    path = np.load("./论文绘图数据/test_path.npy")
+    data =np.load(
+        r"/home/lwh/Project/python_project/Ai_agent/agent_project/simulation/test/test_pathplanning/datas/20260227/06mm_machine_state_C_Ours_20260308153302.npz",allow_pickle=True)
+    path = data["point_results"][99]["results"][0]["path"]
+
+    machine_state = scene_config["machine_state_C"]
+    sim_env.machine.set_joints_states(machine_state)
+    for _ in range(100):
+        sim_env.step_simulation()
+    sim_env.robot_list[0].urdf_path = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm.urdf"
+
+
+
+    import threading
+    def run_simulation():
+        while True:
+            sim_env.step_simulation()
+            # sim_env.robot_list[0].show_link_sys(7, -1, 1)
+            time.sleep(sim_env.time_step)  # 控制仿真步进时间
+            sim_env.robot_list[0].show_link_sys(10, -1, 1, name="1")
+            sim_env.robot_list[0].show_link_sys(5, -1, 1, name="2")
+            sim_env.machine.workpiece.show_link_sys(-1, -1, 1, name="3")
+            # sim_env.rm_sys.update_cam_pos()
+
+    simulation_thread = threading.Thread(target=run_simulation, )
+    simulation_thread.start()
+
+    lens = len(path)
+
+    sim_env.pb_ompl_interface.execute(path[:int(lens*1)], dynamics=True)
 
 
 
@@ -964,4 +1003,5 @@ def show_state():
     pass
 
 if __name__ == '__main__':
-    test_goals()
+    # test_goals()
+    show_path()

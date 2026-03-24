@@ -220,10 +220,56 @@ class PbOMPL():
 
         self.ss.setPlanner(self.planner)
 
-    def plan_start_goal(self, start, goal, allowed_time = DEFAULT_PLANNING_TIME):
+    # def plan_start_goal(self, start, goal, allowed_time = DEFAULT_PLANNING_TIME):
+    #     '''
+    #     plan a path to gaol from the given robot start state
+    #     '''
+    #     print("start_planning")
+    #     print(self.planner.params())
+    #
+    #     orig_robot_state = self.robot.get_cur_state()
+    #
+    #     # set the start and goal states;
+    #     s = ob.State(self.space)
+    #     g = ob.State(self.space)
+    #     for i in range(len(start)):
+    #         s[i] = start[i]
+    #         g[i] = goal[i]
+    #
+    #     self.ss.setStartAndGoalStates(s, g)
+    #
+    #     # attempt to solve the problem within allowed planning time
+    #     solved = self.ss.solve(allowed_time)
+    #     res = False
+    #     sol_path_list = []
+    #     if solved:
+    #         print("Found solution: interpolating into {} segments".format(INTERPOLATE_NUM))
+    #         # print the path to screen
+    #         sol_path_geometric = self.ss.getSolutionPath()
+    #         print('solution path point length: {}'.format(sol_path_geometric.getStateCount()))
+    #         sol_path_geometric.interpolate(INTERPOLATE_NUM)
+    #         sol_path_states = sol_path_geometric.getStates()
+    #         sol_path_list = [self.state_to_list(state) for state in sol_path_states]
+    #         # print(len(sol_path_list))
+    #         # print(sol_path_list)
+    #         for i,sol_path in enumerate(sol_path_list):
+    #             # self.is_state_valid(sol_path)
+    #             if not self.is_state_valid(sol_path):
+    #                 print("Invalid path:", sol_path,"No. of states: ", i)
+    #         res = True
+    #     else:
+    #         print("No solution found")
+    #
+    #     # reset robot state
+    #     self.robot.set_state(orig_robot_state)
+    #     return res, sol_path_list
+
+
+    def plan_start_goal(self, start, goal, allowed_time = DEFAULT_PLANNING_TIME,ret_all=False):
         '''
         plan a path to gaol from the given robot start state
         '''
+        ori_path = []
         print("start_planning")
         print(self.planner.params())
 
@@ -240,12 +286,15 @@ class PbOMPL():
 
         # attempt to solve the problem within allowed planning time
         solved = self.ss.solve(allowed_time)
+        is_exact = str(solved) == "Exact solution"
+        is_approx = str(solved) == "Approximate solution"
         res = False
         sol_path_list = []
-        if solved:
+        if is_exact:
             print("Found solution: interpolating into {} segments".format(INTERPOLATE_NUM))
             # print the path to screen
             sol_path_geometric = self.ss.getSolutionPath()
+            ori_path = [self.state_to_list(state) for state in sol_path_geometric.getStates()]
             print('solution path point length: {}'.format(sol_path_geometric.getStateCount()))
             sol_path_geometric.interpolate(INTERPOLATE_NUM)
             sol_path_states = sol_path_geometric.getStates()
@@ -262,6 +311,14 @@ class PbOMPL():
 
         # reset robot state
         self.robot.set_state(orig_robot_state)
+        if ret_all:
+            si = self.ss.getSpaceInformation()  # SpaceInformation
+            pd = ob.PlannerData(si)
+            self.ss.getPlannerData(pd)
+            solved_time = self.ss.getLastPlanComputationTime()
+
+            return is_exact, ori_path, sol_path_list, solved_time, pd.numVertices()
+
         return res, sol_path_list
 
     def plan(self, goal, allowed_time = DEFAULT_PLANNING_TIME):

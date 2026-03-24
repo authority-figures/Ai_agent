@@ -26,6 +26,10 @@ class TaskSpaceRRT(PbOMPL):
 
         self.set_state_sampler(MixedStateSampler(self.space, self.sample_in_task_space, ratio=0.3))
 
+    def set_random_sample(self):
+        self.set_state_sampler(self.space.allocDefaultStateSampler())
+
+
     def sample_in_task_space(self, num_samples=1):
         if self.T_goal is None:
             return None
