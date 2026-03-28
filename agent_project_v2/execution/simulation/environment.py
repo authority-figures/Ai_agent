@@ -71,15 +71,19 @@ class SimulationEnvironment:
         workpiece_urdf = os.path.join(self.base_path, workpiece_urdf)
         machine_file_name = r"./models/c501-simple.SLDASM/urdf/c501-simple.SLDASM.urdf"
         machine_file_name = os.path.join(self.base_path, machine_file_name)
+
         robot_urdf = r"./models/jaka_description/urdf/jaka_minicobo.urdf"
         robot_urdf = os.path.join(self.base_path, robot_urdf)
-        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm_len140mm.urdf"
+        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm_len248dot37mm.urdf"
         robot_with_rolling_tool_urdf = os.path.join(self.base_path, robot_with_rolling_tool_urdf)
         machine = Machine(self.physics_client)
         self.machine = machine
         self.machine.load_urdf(fileName=machine_file_name, basePosition=(0, 0, 0), useFixedBase=1, flags=0, )
+        tool_id = self.machine.add_tool_to_machine(r"/home/lwh/Project/python_project/Ai_agent/agent_project_v2/execution/simulation/models/tool_12mm/urdf/tool_12mm.urdf"
+                                                   , tool_length=0.210)
+
         self.object_list.append(self.machine.id_robot)
-        self.workpiece_pose = [0.0, 0.06, 0.04]
+        self.workpiece_pose = [0.0029881, 0.1224801, 0.0741485]
         orientation = [0.0, 0.0, 0.0]
         quaternion = p.getQuaternionFromEuler(orientation,physicsClientId=self.physics_client)
         self.workpiece_orientation = quaternion
@@ -87,7 +91,7 @@ class SimulationEnvironment:
                                                              orientation=orientation)
 
         # self.object_list.append(self.workpiece_id)
-        robot_id = self.load_robot(urdf_path=robot_with_rolling_tool_urdf, basePosition=(-0.16, -0.15, 0.7),
+        robot_id = self.load_robot(urdf_path=robot_with_rolling_tool_urdf, basePosition=(-0.176224, -0.149, 0.7),
                                    baseOrientation=(0.7, 0, 0, 0.7), useFixedBase=0,
                                    start=[0, 0, PI / 2, 0, 0, 0], )
         # 消除执行器于机械臂末端的碰撞
@@ -121,7 +125,7 @@ class SimulationEnvironment:
         # 绑定机床到机械臂
         self.rm_sys.init_machine(self.machine, type='velocity')
         # 机械臂位置 -0.2, +0.1, 0.08
-        self.rm_sys.create_constrain(self.machine,self.robot_list[0],parentPosition=[-0.18, +0.1, 0.12], childOrientation=[0.7068252, 0, 0, 0.7073883]
+        self.rm_sys.create_constrain(self.machine,self.robot_list[0],parentPosition=[-0.170, +0.142, 0.12+0.034], childOrientation=[0.7068252, 0, 0, 0.7073883]
                                      ,workpiece_pos=self.workpiece_pose,workpiece_ori=self.workpiece_orientation)
         self.rm_sys.init_robot(self.robot_list[0])
 

@@ -6,9 +6,9 @@ from agent.nodes.executor_graph.state import OverallState
 from agent.tools.exec_graph_tools import using_tools
 import time
 from agent.utils import ColorPrinter
+from agent.config import *
 
-
-llm = chatGPT_llm(model_name="gpt-4o",temperature=0)
+llm = chatGPT_llm(model_name=TEST_MODEL,temperature=0)
 llm_with_tools = llm.bind_tools(using_tools)
 # system_prompt = ("你是一个AI助理,负责依据task中step的执行情况来填写对应的字段,请注意，你需要将上个执行的结果的详细数据也一并写入log中.你可以使用工具来提交修改.每次只填写一个任务，即在所有的step当中的第一个状态为pending的任务,不要修改状态为finished的任务\n"
 #                  "当得知任务执行完毕时（上一个代理回答任务执行完毕或所有的step状态均为finished），你需要回复任务执行完毕,且不要调用工具\n")

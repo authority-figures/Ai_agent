@@ -34,9 +34,10 @@ TIMEOUT = 3.0
 INTERVAL = 0.01
 FORMAT = "json-object"   # 可选: "json-object" / "json-array" / "csv"
 
+# ['A:-0.3559', 'C:-0.9584', 'X:0.4537', 'Y:0.3362', 'Z:-0.1682', 'N:16.0000']
 START_STATE = [0.0, 0.0, 0.0, 0.0, 0.0]          # [A, C, X, Y, Z] -> [deg, deg, mm, mm, mm]
-END_STATE = [10.0, 30.0, 1000.0, 500.0, -100.0] # [A, C, X, Y, Z] -> [deg, deg, mm, mm, mm]
-N = 1000                                          # 插值分段数，最终生成 N + 1 个点
+END_STATE = [-20.3916, -54.912, 453.71000,336.2, -168.2] # [A, C, X, Y, Z] -> [deg, deg, mm, mm, mm]
+N = 100                                          # 插值分段数，最终生成 N + 1 个点
 
 
 def convert_units(axis_values: List[float]) -> List[float]:

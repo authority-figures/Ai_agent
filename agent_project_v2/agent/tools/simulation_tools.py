@@ -58,8 +58,8 @@ async def get_target_joint_state(
     description,
     robot_id,
     target_position,
-    target_orientation,
-    reference_frame,
+    target_orientation=None,
+    reference_frame="world",
 ):
     """
     获取目标姿态下的机械臂关节状态，支持指定参考系（世界坐标系、机械臂坐标系、工件坐标系等）。如果未提供目标姿态，则默认使用当前姿态进行计算。
@@ -154,6 +154,8 @@ async def plan_collision_free_path(
     """
     url = f"{SIMULATION_API_BASE_URL}/plan_path"
     try:
+        if start_joints=="null":
+            start_joints = None
         request = PathPlanRequest(
             planner_name=planner_name,
             start_joints=start_joints,

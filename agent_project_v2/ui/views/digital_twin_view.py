@@ -21,7 +21,7 @@ import subprocess
 import time
 import websockets
 import json
-
+import numpy as np
 
 class PyBulletEmbedder:
     """PyBullet窗口嵌入工具类"""
@@ -451,6 +451,14 @@ class DigitalTwinView(QWidget):
         # 可以在 UI 上显示“已连接物理服务”
 
     def update_machine_axis_labels(self, axis_values):
+        # 转化为机床实际坐标
+        A, C, X, Y, Z = axis_values
+        A = np.rad2deg(A) - 2.5088
+        C = np.rad2deg(C) + 342.3689
+        X = X * 1000 - 768.2837999999999
+        Y = Y * 1000 - 597.0038999999999
+        Z = Z * 1000 + 90.13409999999999
+        axis_values = [A, C, X, Y, Z]
         for axis, value in zip(["A", "C", "X", "Y", "Z"], axis_values):
             label = self.machine_axis_labels.get(axis)
             if label is not None:

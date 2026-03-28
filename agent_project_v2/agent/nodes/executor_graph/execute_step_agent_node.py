@@ -5,10 +5,10 @@ from agent.utils import ColorPrinter
 from agent.nodes.executor_graph.state import OverallState
 from agent.tools.simulation_tools import using_tools
 import time
+from agent.config import *
 
 
-
-llm = chatGPT_llm(model_name="gpt-4o",temperature=0)
+llm = chatGPT_llm(model_name=TEST_MODEL,temperature=0)
 llm_with_tools = llm.bind_tools(using_tools)
 # system_prompt = ("")
 

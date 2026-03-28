@@ -1,5 +1,6 @@
 import json
 
+import numpy as np
 from PyQt5.QtCore import pyqtSignal, Qt, QEvent, QThread, QTimer, QSize, QPoint
 import os
 from xml.etree import ElementTree as ET
@@ -711,7 +712,7 @@ class MachineToolPage(QWidget):
         self.machine_applied_value_label.setWordWrap(False)
         compact_layout.addWidget(self.machine_applied_value_label, 4, 1, 1, len(self.AXES) + 1)
 
-        compact_layout.addWidget(QLabel("当前"), 5, 0)
+        compact_layout.addWidget(QLabel("当前机床实际"), 5, 0)
         self.current_axis_display = LineEdit(type="output")
         self.current_axis_display.setReadOnly(True)
         self.current_axis_display.setFocusPolicy(Qt.NoFocus)
@@ -865,7 +866,16 @@ class MachineToolPage(QWidget):
 
     def _update_machine_axis_display(self, result):
         axis_values = result.get("axis_values", [])
-        display_text = ", ".join([f"{axis}={float(value):.5f}" for axis, value in zip(self.AXES, axis_values)])
+        # 转化为机床实际坐标
+        A,C,X,Y,Z = axis_values
+        A = np.rad2deg(A)  -2.5088
+        C = np.rad2deg(C) + 342.3689
+        X = X*1000 -768.2837999999999
+        Y = Y*1000 -597.0038999999999
+        Z = Z*1000 + 90.13409999999999
+        axis_values = [A, C, X, Y, Z]
+
+        display_text = ", ".join([f"{axis}={float(value):.2f}" for axis, value in zip(self.AXES, axis_values)])
         self.current_axis_display.setText(display_text)
         if all(not self.axis_inputs[axis].text().strip() for axis in self.AXES):
             self.set_axis_inputs_from_values(axis_values)

@@ -8,6 +8,7 @@ from agent.tools.plan_graph_tools import using_tools
 from agent.tools.simulation_tools import using_tools as simulation_tools
 import time
 from agent.utils import ColorPrinter
+from agent.config import *
 
 def render_tool_info_as_text(tools) -> str:
     lines = []
@@ -17,7 +18,7 @@ def render_tool_info_as_text(tools) -> str:
         lines.append(f"{i}. 工具名: {name}\n   功能: {desc}")
     return "\n\n".join(lines)
 
-llm = chatGPT_llm(model_name="gpt-4o-mini",temperature=0)
+llm = chatGPT_llm(model_name=TEST_MODEL,temperature=0)
 llm_with_tools = llm.bind_tools(using_tools)
 
 tool_text = render_tool_info_as_text(simulation_tools)

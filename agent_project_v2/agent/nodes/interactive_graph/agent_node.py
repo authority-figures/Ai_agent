@@ -11,10 +11,10 @@ from agent.tools.interactive_graph_tools import using_tools
 from agent.nodes.node_publisher import send_state
 import time
 from agent.utils import ColorPrinter
+from agent_project_v2.agent.config import *
 
 
-
-llm = chatGPT_llm(model_name="gpt-4o-mini",temperature=0)
+llm = chatGPT_llm(model_name=TEST_MODEL,temperature=0)
 llm_with_tools = llm.bind_tools(using_tools)
 system_prompt = f"""
 你是一个AI助理,请回答用户的问题,必要时可以使用工具
