@@ -16,9 +16,12 @@ OPENAI_BASE_URL = openai_env.get("BASE_URL")
 
 # 模型名称
 GLM3 = "glm-3-turbo"
-GLM4 = "glm-4"
+GLM4_5 = "glm-4.5"
 DEEPSEEK = "deepseek-v3.2"
 DEFAULT_MODEL = "gpt-3.5-turbo"
-DOUBAO = "doubao-1-5-thinking-pro-250415"
+DOUBAO = "doubao-1-5-thinking-pro-250"
+QIANWEN = "qwen3.5-35b-a3b"
+GPT = "gpt-4o"
+GEMINI = "gemini-3-flash-preview"
 
-TEST_MODEL = DEEPSEEK
+TEST_MODEL = GPT

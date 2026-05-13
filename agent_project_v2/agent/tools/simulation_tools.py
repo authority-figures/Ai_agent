@@ -1,6 +1,7 @@
 from langchain.tools import tool  # ✅ 直接使用装饰器
 import httpx
-from pydantic import BaseModel, Field
+import json
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Literal, Optional
 from core.simulation_request import (
     ExecutePathRequest,
@@ -37,6 +38,33 @@ async def get_robot_end_pos_and_ori(description, robot_id, reference_frame="worl
             print(f"[simulation_tools:get_robot_end_pos_and_ori] HTTP Error: {response.status_code}, {response.text}")
             return {"status": "error", "message": response.text}
     except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+class GetRobotJointsStateToolInput(BaseModel):
+    description: str = Field(..., description="对任务的详细复述，需包含输入参数。")
+
+
+@tool(args_schema=GetRobotJointsStateToolInput)
+async def get_robot_joints_state(description):
+    """
+    获取当前机械臂的关节状态。
+
+    参数:
+    - description (str): 对任务的详细复述,包含输入的参数
+
+    返回:
+    - dict: API 响应数据，包含 `status` 和 `joints_state`
+    """
+    url = f"{SIMULATION_API_BASE_URL}/get_robot_joints_state"
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(url, timeout=10)
+            if response.status_code == 200:
+                return response.json()
+            return {"status": "error", "message": f"Failed to get robot joints state: {response.text}"}
+    except Exception as e:
+        print(f"[simulation_tools:get_robot_joints_state] Exception: {e}")
         return {"status": "error", "message": str(e)}
 
 
@@ -121,12 +149,48 @@ class PlanCollisionFreePathToolInput(BaseModel):
     )
     planner_name: str = Field(
         default="RRTConnect",
-        description='规划器名称，默认 "RRTConnect"。 还支持 "RRTConnect_Custom"、"RRTStar"、"PRM" '
+        description='规划器名称，默认 "RRTConnect"。 还支持 "RRTConnect_Custom"'
     )
     allowed_time: float = Field(
-        default=20.0,
+        default=30.0,
         description="规划允许的最大耗时，单位秒，默认 20.0。"
     )
+
+    @field_validator("start_joints", mode="before")
+    @classmethod
+    def normalize_start_joints(cls, v):
+        if v in (None, "null", "", [], "None"):
+            return None
+
+        if isinstance(v, str):
+            s = v.strip()
+
+            if s in ("", "null", "None", "[]"):
+                return None
+
+            # 优先按 JSON / Python list 风格解析，如 "[1,2,3,4,5,6]"
+            if s.startswith("[") and s.endswith("]"):
+                try:
+                    parsed = json.loads(s)
+                    if isinstance(parsed, list):
+                        return [float(x) for x in parsed]
+                except Exception:
+                    raise ValueError("start_joints 字符串格式非法，无法解析为关节列表")
+
+            # 支持逗号分隔，如 "1,2,3,4,5,6"
+            if "," in s:
+                try:
+                    return [float(x.strip()) for x in s.split(",")]
+                except Exception:
+                    raise ValueError("start_joints 字符串格式非法，逗号分隔解析失败")
+
+            # 支持空格分隔，如 "1 2 3 4 5 6"
+            try:
+                return [float(x) for x in s.split()]
+            except Exception:
+                raise ValueError("start_joints 字符串格式非法，无法解析为关节列表")
+
+        return v
 
 @tool(args_schema=PlanCollisionFreePathToolInput)
 async def plan_collision_free_path(
@@ -135,7 +199,7 @@ async def plan_collision_free_path(
     target_joints,
     start_joints = None,
     planner_name="RRTConnect",
-    allowed_time=20.0,
+    allowed_time=30.0,
 ):
     """
     规划一条机械臂从起始关节到目标关节的无碰撞路径，并将结果保存在仿真服务中。
@@ -146,7 +210,7 @@ async def plan_collision_free_path(
     - robot_id (int): 机械臂的 ID（当前仿真环境仅使用已加载的首个机器人）
     - target_joints (list[float]): 目标关节角  （必须提供，且长度必须为 6）
     - start_joints (list[float]|None): 起始关节角 （如果为 None 或空列表，则默认使用当前关节状态）
-    - planner_name (str): 规划器名称，默认 RRTConnect
+    - planner_name (str): 规划器名称，默认 RRTConnect  还支持 "RRTConnect_Custom"(针对插入场景优化)
     - allowed_time (float): 规划超时时间，默认 20 秒
 
     返回:
@@ -154,7 +218,13 @@ async def plan_collision_free_path(
     """
     url = f"{SIMULATION_API_BASE_URL}/plan_path"
     try:
-        if start_joints=="null":
+        # 将字符串转化为列表
+        if isinstance(start_joints, str):
+            start_joints = eval(start_joints)
+        if isinstance(target_joints, str):
+            target_joints = eval(target_joints)
+
+        if start_joints=="null" or start_joints==[] or start_joints=="None":
             start_joints = None
         request = PathPlanRequest(
             planner_name=planner_name,
@@ -192,7 +262,7 @@ async def get_rolling_path(
     参数:
     - description (str): 对任务的详细复述,包含输入的参数
     - robot_id (int): 机械臂的 ID
-    - tool_path_name (str): 刀位文件名称 "区域1" | "区域2" | "区域3" | "区域4"
+    - tool_path_name (str): 刀位文件名称 "区域1" | "区域2" | "区域3" | "区域4" | "前缘区域“ | ”后缘区域”
 
     返回:
     - dict: 包含 `status`、`path_id`、`start_joints` 和 `waypoint_count`
@@ -219,7 +289,7 @@ async def execute_planned_path(
     path_id=None,
     joints_list=None,
     dynamics=False,
-    collision_detection=True,
+    collision_detection=False,
 ):
     """
     执行已规划好的路径。优先使用 path_id 从仿真服务中加载路径，也支持直接传入 joints_list。
@@ -230,7 +300,7 @@ async def execute_planned_path(
     - path_id (str, optional): 规划阶段返回的路径标识符
     - joints_list (list[list[float]], optional): 直接执行的关节路径
     - dynamics (bool): 是否使用动力学执行，默认 False
-    - collision_detection (bool): 是否启用碰撞检测，默认 True
+    - collision_detection (bool): 是否启用碰撞检测，默认 False
 
     返回:
     - dict: 包含 `status` 和 `message`
@@ -241,7 +311,7 @@ async def execute_planned_path(
             joints_list=joints_list,
             path_id=path_id,
             dynamics=dynamics,
-            collision_detection = collision_detection,
+            collision_detection = False,
         )
         async with httpx.AsyncClient() as client:
             response = await client.post(url, json=request.to_dict(), timeout=200)
@@ -287,11 +357,16 @@ async def set_robot_end_pos_and_ori(description, robot_id, pos, ori, reference_f
         return {"status": "error", "message": str(e)}
 
 
+
+
+
 using_tools = [
     # get_robot_end_pos_and_ori,
+    get_robot_joints_state,
     get_target_joint_state,
     set_robot_end_pos_and_ori,
     plan_collision_free_path,
     execute_planned_path,
     get_rolling_path,
+
 ]

@@ -46,7 +46,10 @@ graph.add_conditional_edges("push_task_node",router_update_node,{"continue": "ex
 
 compiled_graph = graph.compile(checkpointer=memory)
 
-session1_config = {"configurable": {"thread_id": "session-1"}}
+session1_config = {"configurable": {"thread_id": "session-1"},
+                    "recursion_limit": 100,   # 注意：放在顶层，不要放进 configurable
+
+                   }
 
 
 if __name__ == '__main__':

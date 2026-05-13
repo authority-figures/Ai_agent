@@ -74,7 +74,7 @@ class SimulationEnvironment:
 
         robot_urdf = r"./models/jaka_description/urdf/jaka_minicobo.urdf"
         robot_urdf = os.path.join(self.base_path, robot_urdf)
-        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm_len248dot37mm.urdf"
+        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm_len140mm.urdf"
         robot_with_rolling_tool_urdf = os.path.join(self.base_path, robot_with_rolling_tool_urdf)
         machine = Machine(self.physics_client)
         self.machine = machine
@@ -163,7 +163,7 @@ class SimulationEnvironment:
         # self.pb_ompl_interface = pb_ompl.PbOMPL(self.robot_list[0], self.obstacles)
         self.pb_ompl_interface = taskspaceRRT.TaskSpaceRRT(self.robot_list[0], self.obstacles)
         self.pb_ompl_interface.set_planner("RRT")
-        self.obstacles.extend([self.workpiece_id,self.machine.id_robot])
+        self.obstacles.extend([self.workpiece_id,self.machine.id_robot,tool_id])
         self.pb_ompl_interface.set_obstacles(self.obstacles)
         # 消除ompl规划时link4与link8的碰撞
         self.pb_ompl_interface.check_link_pairs.remove((4,8))
@@ -172,6 +172,11 @@ class SimulationEnvironment:
         # 设置九点标定
         self.calibration_pather = CalibrationPather(self.robot_list[0], self.pb_ompl_interface)
         self.calibrator : HandEyeCalibrator|None = None
+
+
+        # 测试agent不同任务用
+        self.machine.set_joints_states([-0.3559,-0.9584, 0.4537, 0.3362, -0.2082])
+        self.robot_list[0].set_joints_states([-0.18508, 1.72476, -1.65763, 1.45999, -0.53337, 3.69170])
 
         pass
 

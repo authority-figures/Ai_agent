@@ -59,13 +59,14 @@ def _plan_joint_path(request: PathPlanRequest):
     if planner_name in {"RRTConnect_Custom", "RRTConnect"} and hasattr(planner, "get_T_goal") and hasattr(planner, "set_tsRRT_sample"):
         if planner_name == "RRTConnect_Custom":
             planner.get_T_goal(request.target_joints, tcp_name="rolling_tool")
-            planner.z_range = (0.01, 0.2)
-            planner.x_range = (-0.01, 0.01)
-            planner.y_range = (-0.001, 0.001)
-            planner.yaw_range = 30
-            planner.roll_range = 5
-            planner.pitch_range = 5
+            sim_env.pb_ompl_interface.z_range = (0.01, 0.16)  # z-axis range for sampling
+            sim_env.pb_ompl_interface.x_range = (-0.003, 0.003)
+            sim_env.pb_ompl_interface.y_range = (-0.001, 0.001)
+            sim_env.pb_ompl_interface.yaw_range = 3
+            sim_env.pb_ompl_interface.roll_range = 1
+            sim_env.pb_ompl_interface.pitch_range = 1
             planner.set_tsRRT_sample()
+            sim_env.pb_ompl_interface.space.state_sampler.ratio = 0.4
         else:
             planner.set_random_sample()
         planner.set_planner("RRTConnect")
@@ -286,6 +287,19 @@ async def get_object_pos_and_ori(request: GetIDRequest):
         return {"status": "error", "message": str(e)}
 
 
+@app.post("/get_robot_joints_state")
+async def get_robot_joints_state():
+    """ API: 获取当前机械臂关节状态 """
+    try:
+        if len(sim_env.robot_list) == 0:
+            return {"status": "error", "message": "No robot loaded"}
+        joints = sim_env.robot_list[0].get_joints_states()
+        return {"status": "success", "joints_state": list(joints)}
+    except Exception as e:
+        print("[execution:simulation:api:get_robot_joints_state] Error getting robot joints state:", e)
+        return {"status": "error", "message": str(e)}
+
+
 @app.post("/reset_joints_state")
 async def reset_joints_state(request: JointMoveRequest):
     """ API: 重置机械臂关节状态 """
@@ -420,6 +434,10 @@ async def get_rolling_path(request: RollingPathRequest):
             tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域4.cls"
         elif "区域0" in request.tool_path_name:
             tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域0_起始点靠里面.cls"
+        elif "前缘" in request.tool_path_name:
+            tool_path_file = "/home/lwh/Project/python_project/Ai_agent_test1/agent_project_v2/runtime/UG/前缘区域.cls"
+        elif "后缘" in request.tool_path_name:
+            tool_path_file = "/home/lwh/Project/python_project/Ai_agent_test1/agent_project_v2/runtime/UG/后缘区域.cls"
         else:
             tool_path_file = "/home/lwh/Project/python_project/Ai_agent/agent_project_v2/runtime/UG/6061_A_区域1.cls"
 

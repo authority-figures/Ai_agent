@@ -69,7 +69,7 @@ class SimulationEnvironment:
         machine_file_name = os.path.join(self.base_path, machine_file_name)
         robot_urdf = r"./models/jaka_description/urdf/jaka_minicobo.urdf"
         robot_urdf = os.path.join(self.base_path, robot_urdf)
-        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_10mm.urdf"
+        robot_with_rolling_tool_urdf = r"./models/jaka_description/urdf/jaka_minicobo_with_rolling_tool_12mm.urdf"
         robot_with_rolling_tool_urdf = os.path.join(self.base_path, robot_with_rolling_tool_urdf)
         machine = Machine(self.physics_client)
         self.machine = machine
@@ -1531,7 +1531,7 @@ def test_point():
 
     # target_point_in_robot_sys = sim_env.rm_sys.get_point_in_workpiece2robot((0,-0.3,0.5),(0,0,0, 1))
 
-    goal = joints_list[82]
+    goal = joints_list[9]
     # 设置机械臂/机床的初始位置
     sim_env.robot_list[0].set_state(start)
     sim_env.robot_list[0].set_joints_states(start)
@@ -1553,11 +1553,11 @@ def test_point():
     sim_env.pb_ompl_interface.x_range = (-0.005,0.005)
     sim_env.pb_ompl_interface.y_range = (-0.001,0.001)
     sim_env.pb_ompl_interface.yaw_range = 3
-    sim_env.pb_ompl_interface.roll_range = 1
-    sim_env.pb_ompl_interface.pitch_range = 1
-    # sim_env.pb_ompl_interface.set_tsRRT_sample()
-    # sim_env.pb_ompl_interface.space.state_sampler.ratio=0.3
-    sim_env.pb_ompl_interface.set_random_sample()
+    sim_env.pb_ompl_interface.roll_range = 10
+    sim_env.pb_ompl_interface.pitch_range = 10
+    sim_env.pb_ompl_interface.set_tsRRT_sample()
+    sim_env.pb_ompl_interface.space.state_sampler.ratio=0.3
+    # sim_env.pb_ompl_interface.set_random_sample()
     sim_env.pb_ompl_interface.set_planner("RRTConnect")
 
     start = sim_env.pb_ompl_interface.robot.get_cur_state()

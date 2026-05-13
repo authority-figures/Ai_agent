@@ -33,7 +33,10 @@ graph.add_edge("answer_node",END)
 
 compiled_graph = graph.compile(checkpointer=memory)
 
-session1_config = {"configurable": {"thread_id": "session-1"}}
+session1_config = {"configurable": {"thread_id": "session-1"},
+                    "recursion_limit": 30,   # 注意：放在顶层，不要放进 configurable
+
+                   }
 
 
 if __name__ == '__main__':
